@@ -1,0 +1,35 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller & Build artifacts
+*.manifest
+*.spec
+build/
+dist/
+*.exe
+
+# Logs and runtime databases
+*.log
+fti_debug.log
+test_*.txt
+*.tmp
+*.lnk
+
+# Output reports (keep directory structure)
+output/*.xlsx
+!output/.gitkeep
+
+# Environment & Cache
+.agents/
+.env
+venv/
+.venv/
+env/
+
+# OS / Editor files
+.vscode/
+.idea/
+Thumbs.db
+Desktop.ini
