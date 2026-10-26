@@ -86,29 +86,90 @@ comparator = InventoryComparator()
 # Autosave session configuration
 AUTOSAVE_DIR = os.path.join(os.environ.get("LOCALAPPDATA", BASE_DIR), "FTI_Inventory_Compare")
 os.makedirs(AUTOSAVE_DIR, exist_ok=True)
-AUTOSAVE_FILE = os.path.join(AUTOSAVE_DIR, "session_autosave.json")
+SOURCES_DIR = os.path.join(AUTOSAVE_DIR, "sources")
+os.makedirs(SOURCES_DIR, exist_ok=True)
+AUTOSAVE_FILE = os.path.join(AUTOSAVE_DIR, "session_state.json")
+LEGACY_AUTOSAVE_FILE = os.path.join(AUTOSAVE_DIR, "session_autosave.json")
+
 comparator.autosave_path = AUTOSAVE_FILE
+comparator.sources_dir = SOURCES_DIR
 
 def init_app_session():
-    """Start with restored autosave if present; otherwise clean slate for MVP."""
+    """Start with restored autosave if present; otherwise fallback to default base files."""
     try:
+        # 1. Clean up legacy corrupted file if present
+        if os.path.exists(LEGACY_AUTOSAVE_FILE):
+            try:
+                os.remove(LEGACY_AUTOSAVE_FILE)
+            except Exception:
+                pass
+
+        # 2. Try loading from persistent session state
         restored = comparator.load_autosave(AUTOSAVE_FILE)
         if restored:
             total = comparator.summary.get('overall', {}).get('total_records', 0)
             rate = comparator.summary.get('overall', {}).get('match_rate', 0)
             logger.info(f"Restored previous session from autosave: {total} records, {rate}% match rate", component="AUTOSAVE")
-            # If DataFrames are not loaded in restored session, reload from local source files if present
-            try:
-                if comparator.hw_df is None and os.path.exists(os.path.join(BASE_DIR, "1-it_asset_HW.xlsx")):
-                    comparator.hw_df = pd.read_excel(os.path.join(BASE_DIR, "1-it_asset_HW.xlsx"))
-                if comparator.sw_df is None and os.path.exists(os.path.join(BASE_DIR, "2-it_asset_SW.xlsx")):
-                    comparator.sw_df = pd.read_excel(os.path.join(BASE_DIR, "2-it_asset_SW.xlsx"))
-                if comparator.ups_df is None and os.path.exists(os.path.join(BASE_DIR, "3-it_asset_UPS_Monitor.xlsx")):
-                    comparator.ups_df = pd.read_excel(os.path.join(BASE_DIR, "3-it_asset_UPS_Monitor.xlsx"))
-                if not comparator.master_dict and os.path.exists(os.path.join(BASE_DIR, "0-FTI_asset_HWSWOth.xlsx")):
-                    comparator.load_master(os.path.join(BASE_DIR, "0-FTI_asset_HWSWOth.xlsx"))
-            except Exception as e_df:
-                logger.warn(f"Notice loading base Excel files during restore: {e_df}", component="AUTOSAVE")
+            # If any DataFrame is still missing in memory, check SOURCES_DIR or BASE_DIR
+            base_file_map = {
+                "master": "0-FTI_asset_HWSWOth.xlsx",
+                "hw": "1-it_asset_HW.xlsx",
+                "sw": "2-it_asset_SW.xlsx",
+                "ups": "3-it_asset_UPS_Monitor.xlsx"
+            }
+            for cat, bfile in base_file_map.items():
+                attr = f"{cat}_df"
+                if getattr(comparator, attr) is None:
+                    src_file = os.path.join(SOURCES_DIR, f"source_{cat}.xlsx")
+                    if os.path.exists(src_file):
+                        try:
+                            setattr(comparator, attr, pd.read_excel(src_file))
+                        except Exception:
+                            pass
+                    else:
+                        src_in_base = os.path.join(BASE_DIR, bfile)
+                        if os.path.exists(src_in_base):
+                            try:
+                                df_base = pd.read_excel(src_in_base)
+                                setattr(comparator, attr, df_base)
+                                import shutil
+                                shutil.copy2(src_in_base, src_file)
+                            except Exception as e_base:
+                                logger.warn(f"Notice loading base file for {cat}: {e_base}", component="AUTOSAVE")
+            return
+
+        # 3. If no persistent session exists, check if default base files exist in BASE_DIR
+        base_master = os.path.join(BASE_DIR, "0-FTI_asset_HWSWOth.xlsx")
+        base_hw = os.path.join(BASE_DIR, "1-it_asset_HW.xlsx")
+        base_sw = os.path.join(BASE_DIR, "2-it_asset_SW.xlsx")
+        base_ups = os.path.join(BASE_DIR, "3-it_asset_UPS_Monitor.xlsx")
+
+        if os.path.exists(base_master) and (os.path.exists(base_hw) or os.path.exists(base_sw) or os.path.exists(base_ups)):
+            logger.info("First-time session: Loading default base Excel files...", component="SESSION")
+            import shutil
+            if os.path.exists(base_master):
+                comparator.master_filename = "0-FTI_asset_HWSWOth.xlsx"
+                comparator.load_master(base_master)
+                shutil.copy2(base_master, os.path.join(SOURCES_DIR, "source_master.xlsx"))
+            if os.path.exists(base_hw):
+                comparator.hw_filename = "1-it_asset_HW.xlsx"
+                comparator.hw_df = pd.read_excel(base_hw)
+                comparator.records["hw"] = comparator._parse_hw_df(comparator.hw_df)
+                shutil.copy2(base_hw, os.path.join(SOURCES_DIR, "source_hw.xlsx"))
+            if os.path.exists(base_sw):
+                comparator.sw_filename = "2-it_asset_SW.xlsx"
+                comparator.sw_df = pd.read_excel(base_sw)
+                comparator.records["sw"] = comparator._parse_sw_df(comparator.sw_df)
+                shutil.copy2(base_sw, os.path.join(SOURCES_DIR, "source_sw.xlsx"))
+            if os.path.exists(base_ups):
+                comparator.ups_filename = "3-it_asset_UPS_Monitor.xlsx"
+                comparator.ups_df = pd.read_excel(base_ups)
+                comparator.records["ups"] = comparator._parse_ups_df(comparator.ups_df)
+                shutil.copy2(base_ups, os.path.join(SOURCES_DIR, "source_ups.xlsx"))
+
+            comparator.recompare()
+            comparator.autosave()
+            logger.info(f"Initialized from base files: {comparator.summary.get('overall', {}).get('total_records', 0)} records loaded and saved.", component="SESSION")
         else:
             logger.info("Clean session initialized. Ready for file upload.", component="SESSION")
     except Exception as e:
@@ -116,6 +177,7 @@ def init_app_session():
 
 # Initialize on module load
 init_app_session()
+
 
 
 @app.on_event("startup")
@@ -472,6 +534,14 @@ async def upload_files(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse Excel file: {str(e)}")
 
+    # Persist the exact uploaded Excel file to SOURCES_DIR for session continuity
+    try:
+        src_target = os.path.join(SOURCES_DIR, f"source_{file_type}.xlsx")
+        with open(src_target, "wb") as f_src:
+            f_src.write(content)
+    except Exception as e_save:
+        logger.warn(f"Could not persist uploaded file to sources: {e_save}", component="UPLOAD")
+
     if file_type == "master":
         comparator.master_filename = file.filename
         comparator.load_master(df)
@@ -495,6 +565,7 @@ async def upload_files(
 
     comparator.recompare()
     comparator.autosave()
+
     return JSONResponse({
         "status": "success",
         "message": f"อัปโหลดไฟล์ {file_type.upper()} สำเร็จ ({len(df):,} รายการ)",
