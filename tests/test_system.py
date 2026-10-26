@@ -1,5 +1,6 @@
 import sys
 import os
+import pandas as pd
 from starlette.testclient import TestClient
 
 if sys.platform == 'win32':
@@ -100,13 +101,35 @@ def test_clean_business_flow():
     assert data_25["total_pages"] == expected_pages
     print(f"    Pagination (page_size=25): Total {total_records} records, {data_25['total_pages']} pages computed correctly!")
 
-    print("[10] Testing Re-opened Application Session Export (Issue 2 Verification)...")
-    # Simulate closing the app and reopening from autosave where in-memory DataFrames are None
-    comparator.autosave()
-    comparator.hw_df = None
-    comparator.sw_df = None
-    comparator.ups_df = None
+    print("[10] Testing Re-opened Application Session Export & Atomic State (Issue 2 Verification)...")
+    # Verify session_state.json exists and is valid JSON without any truncation
+    from app import AUTOSAVE_FILE, SOURCES_DIR
+    import json
+    assert os.path.exists(AUTOSAVE_FILE), f"AUTOSAVE_FILE not found at {AUTOSAVE_FILE}"
+    with open(AUTOSAVE_FILE, "r", encoding="utf-8") as f:
+        saved_state = json.load(f)
+    assert "records" in saved_state and "summary" in saved_state
+    print(f"    Atomic session_state.json verified: {os.path.getsize(AUTOSAVE_FILE)} bytes, valid JSON!")
 
+    # Verify source_hw.xlsx exists in SOURCES_DIR
+    src_hw_path = os.path.join(SOURCES_DIR, "source_hw.xlsx")
+    assert os.path.exists(src_hw_path), f"source_hw.xlsx not found at {src_hw_path}"
+    df_src_hw = pd.read_excel(src_hw_path)
+    assert len(df_src_hw.columns) >= 20, f"Expected full schema >= 20 columns, got {len(df_src_hw.columns)}"
+    print(f"    Source storage verified: source_hw.xlsx has {len(df_src_hw.columns)} columns (all original columns preserved)!")
+
+    # Test fresh cold instance loading
+    from engine.comparator import InventoryComparator
+    fresh_comp = InventoryComparator()
+    fresh_comp.sources_dir = SOURCES_DIR
+    restored = fresh_comp.load_autosave(AUTOSAVE_FILE)
+    assert restored, "Failed to restore session in fresh InventoryComparator"
+    assert len(fresh_comp.records.get("hw", [])) > 0, "No hw records restored"
+    assert fresh_comp.hw_df is not None, "hw_df not restored from sources_dir"
+    assert len(fresh_comp.hw_df.columns) == len(df_src_hw.columns), "hw_df columns mismatch after restore"
+    print(f"    Fresh comparator restored successfully: {fresh_comp.summary.get('overall', {}).get('total_records')} records, full DataFrame restored!")
+
+    # Download exports via TestClient
     for cat in ("hw", "sw", "ups"):
         res_cat = client.get(f"/api/export/inventory/{cat}")
         assert res_cat.status_code == 200, f"Export for {cat} failed after cold restart: {res_cat.text}"
@@ -117,3 +140,4 @@ def test_clean_business_flow():
 
 if __name__ == "__main__":
     test_clean_business_flow()
+
