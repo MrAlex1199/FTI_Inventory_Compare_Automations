@@ -18,6 +18,9 @@ if sys.stderr is None:
 elif not hasattr(sys.stderr, "isatty"):
     sys.stderr.isatty = lambda: False
 
+if sys.stdin is None:
+    sys.stdin = io.StringIO()
+
 import time
 import datetime
 from typing import Optional, Dict, Any, List
@@ -40,7 +43,7 @@ app = FastAPI(title="FTI IT Asset Inventory Compare System", version="1.0.0")
 async def log_requests_middleware(request: Request, call_next):
     start_time = time.time()
     path = request.url.path
-    is_heartbeat = path == "/api/heartbeat"
+    is_heartbeat = path in ("/api/heartbeat", "/api/client_unloading")
     client_ip = request.client.host if request.client else "127.0.0.1"
 
     try:
@@ -196,11 +199,16 @@ class EditRecordRequest(BaseModel):
     user: Optional[str] = "IT Officer"
 
 last_heartbeat_time = datetime.datetime.now().timestamp()
+unloading_time: Optional[float] = None
 server_ref = None
 
 def get_last_heartbeat() -> float:
     global last_heartbeat_time
     return last_heartbeat_time
+
+def get_unloading_time() -> Optional[float]:
+    global unloading_time
+    return unloading_time
 
 def set_server_instance(srv):
     global server_ref
@@ -208,9 +216,17 @@ def set_server_instance(srv):
 
 @app.get("/api/heartbeat")
 async def get_heartbeat():
-    global last_heartbeat_time
+    global last_heartbeat_time, unloading_time
     last_heartbeat_time = datetime.datetime.now().timestamp()
+    unloading_time = None  # Reset unloading status on client active check
     return {"status": "ok", "time": last_heartbeat_time}
+
+@app.post("/api/client_unloading")
+async def notify_client_unloading():
+    """Client window sent beacon that it is unloading/closing."""
+    global unloading_time
+    unloading_time = datetime.datetime.now().timestamp()
+    return {"status": "acknowledged", "time": unloading_time}
 
 @app.post("/api/shutdown")
 async def request_shutdown(force: bool = False):
