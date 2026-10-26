@@ -303,39 +303,95 @@ class ReportGenerator:
     @staticmethod
     def export_corrected_inventory_bytes(comparator, category: str) -> io.BytesIO:
         """Export updated inventory dataframe directly into in-memory BytesIO buffer."""
+        recs = comparator.records.get(category, [])
         if category == "hw":
-            df = comparator.hw_df.copy().astype(object)
-            recs = comparator.records.get("hw", [])
+            if comparator.hw_df is not None and isinstance(comparator.hw_df, pd.DataFrame) and not comparator.hw_df.empty:
+                df = comparator.hw_df.copy().astype(object)
+            else:
+                rows = []
+                for r in recs:
+                    rows.append({
+                        "Record-ID": r.get("it_record_id", ""),
+                        "รหัสพนักงาน": r.get("it_emp_id", ""),
+                        "ผู้ใช้งาน/ดูแล": r.get("it_emp_name", ""),
+                        "สถานที่เก็บ": r.get("it_dept", ""),
+                        "ชื่อทรัพย์สิน": r.get("it_asset_name", ""),
+                        "ประเภททรัพย์สิน": r.get("it_asset_type", "PC"),
+                        "เลขที่ทรัพย์สิน": r.get("asset_id", ""),
+                        "S/N": r.get("it_sn", ""),
+                        "PC_Name": r.get("it_pc_name", ""),
+                        "รหัสทรัพย์สิน Monitor": r.get("it_monitor_asset", ""),
+                        "รหัสทรัพย์สิน UPS": r.get("it_ups_asset", ""),
+                        "สถานะ(การตรวจสอบ)": r.get("it_check_status", ""),
+                        "AssetRemark": r.get("it_remark", "")
+                    })
+                df = pd.DataFrame(rows)
+
             for r in recs:
-                idx = r["row_index"]
-                if idx in df.index:
-                    df.at[idx, "รหัสพนักงาน"] = r["it_emp_id"]
-                    df.at[idx, "ผู้ใช้งาน/ดูแล"] = r["it_emp_name"]
-                    df.at[idx, "สถานที่เก็บ"] = r["it_dept"]
-                    df.at[idx, "เลขที่ทรัพย์สิน"] = r["asset_id"]
-                    df.at[idx, "S/N"] = r["it_sn"]
+                idx = r.get("row_index")
+                if idx is not None and idx in df.index:
+                    df.at[idx, "รหัสพนักงาน"] = r.get("it_emp_id", "")
+                    df.at[idx, "ผู้ใช้งาน/ดูแล"] = r.get("it_emp_name", "")
+                    df.at[idx, "สถานที่เก็บ"] = r.get("it_dept", "")
+                    df.at[idx, "เลขที่ทรัพย์สิน"] = r.get("asset_id", "")
+                    df.at[idx, "S/N"] = r.get("it_sn", "")
         elif category == "sw":
-            df = comparator.sw_df.copy().astype(object)
-            recs = comparator.records.get("sw", [])
+            if comparator.sw_df is not None and isinstance(comparator.sw_df, pd.DataFrame) and not comparator.sw_df.empty:
+                df = comparator.sw_df.copy().astype(object)
+            else:
+                rows = []
+                for r in recs:
+                    rows.append({
+                        "IdAssetRecId": r.get("it_record_id", ""),
+                        "รหัส Software": r.get("it_software_code", ""),
+                        "ชื่อ Software": r.get("it_asset_name", ""),
+                        "Key License": r.get("it_sn", "") or r.get("it_license_key", ""),
+                        "PCName": r.get("it_pc_name", ""),
+                        "รหัสพนักงาน": r.get("it_emp_id", ""),
+                        "ผู้ดูแล": r.get("it_emp_name", ""),
+                        "สถานที่เก็บ": r.get("it_dept", ""),
+                        "เลขที่ทรัพย์สิน": r.get("asset_id", ""),
+                        "Check FixAsset": r.get("it_check_fixasset", "")
+                    })
+                df = pd.DataFrame(rows)
+
             for r in recs:
-                idx = r["row_index"]
-                if idx in df.index:
-                    df.at[idx, "รหัสพนักงาน"] = r["it_emp_id"]
-                    df.at[idx, "ผู้ดูแล"] = r["it_emp_name"]
-                    df.at[idx, "สถานที่เก็บ"] = r["it_dept"]
-                    df.at[idx, "เลขที่ทรัพย์สิน"] = r["asset_id"]
-                    df.at[idx, "Key License"] = r["it_sn"]
+                idx = r.get("row_index")
+                if idx is not None and idx in df.index:
+                    df.at[idx, "รหัสพนักงาน"] = r.get("it_emp_id", "")
+                    df.at[idx, "ผู้ดูแล"] = r.get("it_emp_name", "")
+                    df.at[idx, "สถานที่เก็บ"] = r.get("it_dept", "")
+                    df.at[idx, "เลขที่ทรัพย์สิน"] = r.get("asset_id", "")
+                    df.at[idx, "Key License"] = r.get("it_sn", "")
         elif category == "ups":
-            df = comparator.ups_df.copy().astype(object)
-            recs = comparator.records.get("ups", [])
+            if comparator.ups_df is not None and isinstance(comparator.ups_df, pd.DataFrame) and not comparator.ups_df.empty:
+                df = comparator.ups_df.copy().astype(object)
+            else:
+                rows = []
+                for r in recs:
+                    rows.append({
+                        "Record-ID": r.get("it_record_id", ""),
+                        "รหัสพนักงาน": r.get("it_emp_id", ""),
+                        "ผู้ใช้งาน/ดูแล": r.get("it_emp_name", ""),
+                        "สถานที่เก็บ": r.get("it_dept", ""),
+                        "เลขที่ทรัพย์สิน": r.get("asset_id", ""),
+                        "ประเภททรัพย์สิน": r.get("it_asset_type", "UPS/Monitor"),
+                        "ชื่อทรัพย์สิน": r.get("it_asset_name", ""),
+                        "S/N": r.get("it_sn", ""),
+                        "PC_Name": r.get("it_pc_name", ""),
+                        "สถานะ(การตรวจสอบ)": r.get("it_check_status", ""),
+                        "AssetRemark": r.get("it_remark", "")
+                    })
+                df = pd.DataFrame(rows)
+
             for r in recs:
-                idx = r["row_index"]
-                if idx in df.index:
-                    df.at[idx, "รหัสพนักงาน"] = r["it_emp_id"]
-                    df.at[idx, "ผู้ใช้งาน/ดูแล"] = r["it_emp_name"]
-                    df.at[idx, "สถานที่เก็บ"] = r["it_dept"]
-                    df.at[idx, "เลขที่ทรัพย์สิน"] = r["asset_id"]
-                    df.at[idx, "S/N"] = r["it_sn"]
+                idx = r.get("row_index")
+                if idx is not None and idx in df.index:
+                    df.at[idx, "รหัสพนักงาน"] = r.get("it_emp_id", "")
+                    df.at[idx, "ผู้ใช้งาน/ดูแล"] = r.get("it_emp_name", "")
+                    df.at[idx, "สถานที่เก็บ"] = r.get("it_dept", "")
+                    df.at[idx, "เลขที่ทรัพย์สิน"] = r.get("asset_id", "")
+                    df.at[idx, "S/N"] = r.get("it_sn", "")
         else:
             raise ValueError(f"Unknown category: {category}")
 
