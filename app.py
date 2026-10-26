@@ -97,6 +97,18 @@ def init_app_session():
             total = comparator.summary.get('overall', {}).get('total_records', 0)
             rate = comparator.summary.get('overall', {}).get('match_rate', 0)
             logger.info(f"Restored previous session from autosave: {total} records, {rate}% match rate", component="AUTOSAVE")
+            # If DataFrames are not loaded in restored session, reload from local source files if present
+            try:
+                if comparator.hw_df is None and os.path.exists(os.path.join(BASE_DIR, "1-it_asset_HW.xlsx")):
+                    comparator.hw_df = pd.read_excel(os.path.join(BASE_DIR, "1-it_asset_HW.xlsx"))
+                if comparator.sw_df is None and os.path.exists(os.path.join(BASE_DIR, "2-it_asset_SW.xlsx")):
+                    comparator.sw_df = pd.read_excel(os.path.join(BASE_DIR, "2-it_asset_SW.xlsx"))
+                if comparator.ups_df is None and os.path.exists(os.path.join(BASE_DIR, "3-it_asset_UPS_Monitor.xlsx")):
+                    comparator.ups_df = pd.read_excel(os.path.join(BASE_DIR, "3-it_asset_UPS_Monitor.xlsx"))
+                if not comparator.master_dict and os.path.exists(os.path.join(BASE_DIR, "0-FTI_asset_HWSWOth.xlsx")):
+                    comparator.load_master(os.path.join(BASE_DIR, "0-FTI_asset_HWSWOth.xlsx"))
+            except Exception as e_df:
+                logger.warn(f"Notice loading base Excel files during restore: {e_df}", component="AUTOSAVE")
         else:
             logger.info("Clean session initialized. Ready for file upload.", component="SESSION")
     except Exception as e:
@@ -196,7 +208,7 @@ async def get_records(
     filter_type: str = Query("all", description="all, both, emp, dept, scrapped, missing"),
     search: str = Query("", description="search query"),
     page: int = Query(1, ge=1),
-    page_size: int = Query(25, ge=5, le=500)
+    page_size: int = Query(25, ge=5, le=100000)
 ):
     """Retrieve paginated records with filtering."""
     offset = (page - 1) * page_size
@@ -227,6 +239,7 @@ async def get_records(
 
     return JSONResponse({
         "total": total_count,
+        "total_count": total_count,
         "page": page,
         "page_size": page_size,
         "total_pages": (total_count + page_size - 1) // page_size if total_count > 0 else 1,
@@ -531,17 +544,21 @@ async def export_inventory_file(category: str):
     if category not in ("hw", "sw", "ups"):
         raise HTTPException(status_code=400, detail="Category must be hw, sw, or ups")
 
-    buf = ReportGenerator.export_corrected_inventory_bytes(comparator, category)
-    now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    name_map = {
-        "hw": "1-it_asset_HW_Corrected",
-        "sw": "2-it_asset_SW_Corrected",
-        "ups": "3-it_asset_UPS_Monitor_Corrected"
-    }
-    filename = f"{name_map[category]}_{now_str}.xlsx"
+    try:
+        buf = ReportGenerator.export_corrected_inventory_bytes(comparator, category)
+        now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        name_map = {
+            "hw": "1-it_asset_HW_Corrected",
+            "sw": "2-it_asset_SW_Corrected",
+            "ups": "3-it_asset_UPS_Monitor_Corrected"
+        }
+        filename = f"{name_map[category]}_{now_str}.xlsx"
 
-    return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        logger.error(f"Error exporting corrected inventory ({category}): {e}", component="EXPORT", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"เกิดข้อผิดพลาดในการสร้างไฟล์ Inventory: {str(e)}")
