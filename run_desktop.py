@@ -103,7 +103,7 @@ def main():
     port = find_free_port(start_port=8000, max_port=8099)
     url = f"http://127.0.0.1:{port}"
 
-    from app import app, set_server_instance
+    from app import app, set_server_instance, get_last_heartbeat, get_unloading_time
     import uvicorn
 
     config = uvicorn.Config(
@@ -146,18 +146,37 @@ def main():
 
     # Monitor lifecycle (Clean shutdown on window close or exit button)
     try:
+        startup_grace_period = 45.0  # seconds grace period for initial app launch
+        startup_time = time.time()
         while not server.should_exit:
             time.sleep(1)
-            # If the dedicated browser window process exited (user clicked X)
-            if browser_proc is not None and browser_proc.poll() is not None:
-                time.sleep(2)
-                if browser_proc.poll() is not None:
-                    logger.info("Desktop application window closed. Shutting down server...", component="MAIN")
+            now = time.time()
+
+            # 1. Check if client explicitly sent unload beacon and didn't reconnect within 5 seconds
+            unload_t = get_unloading_time()
+            if unload_t is not None and (now - unload_t) > 5.0:
+                logger.info("Desktop window closed (unload beacon confirmed). Shutting down server...", component="MAIN")
+                server.should_exit = True
+                break
+
+            # 2. Check heartbeat watchdog timeout (safety monitor if browser crashed or killed)
+            if (now - startup_time) > startup_grace_period:
+                last_hb = get_last_heartbeat()
+                if (now - last_hb) > 30.0:
+                    logger.info("No heartbeat received from UI for >30s. Shutting down server...", component="MAIN")
                     server.should_exit = True
                     break
+
     except (KeyboardInterrupt, SystemExit):
         logger.info("Shutdown signal received. Exiting...", component="MAIN")
         server.should_exit = True
+    finally:
+        server.should_exit = True
+        if browser_proc is not None and browser_proc.poll() is None:
+            try:
+                browser_proc.terminate()
+            except Exception:
+                pass
 
 if __name__ == "__main__":
     main()
