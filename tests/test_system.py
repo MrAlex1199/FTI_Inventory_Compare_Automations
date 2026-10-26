@@ -81,6 +81,38 @@ def test_clean_business_flow():
     assert len(res_inv.content) > 10000
     print(f"    Corrected inventory downloaded: {len(res_inv.content)} bytes")
 
+    print("[9] Testing Pagination & All Records (Issue 1 Verification)...")
+    res_page_all = client.get("/api/records?category=all&mismatch_only=true&page=1&page_size=99999")
+    assert res_page_all.status_code == 200
+    data_all = res_page_all.json()
+    assert "total" in data_all and "total_count" in data_all
+    assert data_all["total"] == data_all["total_count"]
+    total_records = data_all["total"]
+    assert len(data_all["records"]) == total_records, f"Expected {total_records} records, got {len(data_all['records'])}"
+    print(f"    Show All (page_size=99999): Successfully returned all {total_records} records!")
+
+    # Test page_size=25
+    res_page_25 = client.get("/api/records?category=all&mismatch_only=true&page=1&page_size=25")
+    assert res_page_25.status_code == 200
+    data_25 = res_page_25.json()
+    assert data_25["page_size"] == 25
+    expected_pages = (total_records + 24) // 25
+    assert data_25["total_pages"] == expected_pages
+    print(f"    Pagination (page_size=25): Total {total_records} records, {data_25['total_pages']} pages computed correctly!")
+
+    print("[10] Testing Re-opened Application Session Export (Issue 2 Verification)...")
+    # Simulate closing the app and reopening from autosave where in-memory DataFrames are None
+    comparator.autosave()
+    comparator.hw_df = None
+    comparator.sw_df = None
+    comparator.ups_df = None
+
+    for cat in ("hw", "sw", "ups"):
+        res_cat = client.get(f"/api/export/inventory/{cat}")
+        assert res_cat.status_code == 200, f"Export for {cat} failed after cold restart: {res_cat.text}"
+        assert len(res_cat.content) > 2000, f"Export content for {cat} too small"
+        print(f"    Cold session export '{cat}': {len(res_cat.content)} bytes downloaded successfully!")
+
     print("\n[SUCCESS] Clean business flow verification complete and all tests passed!")
 
 if __name__ == "__main__":
