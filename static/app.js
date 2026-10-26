@@ -833,10 +833,31 @@ document.addEventListener("DOMContentLoaded", () => {
     loadSummary();
     loadRecords();
 
-    // Heartbeat for connection health check
-    setInterval(() => {
+    // Continuous Heartbeat with Web Worker backup to prevent background timer throttling
+    function pingHeartbeat() {
         fetch("/api/heartbeat").catch(() => {});
-    }, 5000);
+    }
+
+    try {
+        const hbBlob = new Blob([
+            "setInterval(() => { postMessage('hb'); }, 3000);"
+        ], { type: "application/javascript" });
+        const hbWorker = new Worker(URL.createObjectURL(hbBlob));
+        hbWorker.onmessage = () => {
+            pingHeartbeat();
+        };
+    } catch (e) {
+        setInterval(pingHeartbeat, 3000);
+    }
+
+    // Client Unloading Beacon (signals clean exit when window is closed)
+    window.addEventListener("beforeunload", () => {
+        if (navigator.sendBeacon) {
+            navigator.sendBeacon("/api/client_unloading");
+        } else {
+            fetch("/api/client_unloading", { method: "POST", keepalive: true }).catch(() => {});
+        }
+    });
 
     // =========================================================================
     // System Log Modal Operations (Centered Pro Max Terminal)
