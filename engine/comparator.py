@@ -151,6 +151,13 @@ class InventoryComparator:
         self.undo_stack: List[Dict[str, Any]] = []
         self.redo_stack: List[Dict[str, Any]] = []
         self.autosave_path: Optional[str] = None
+        self.sources_dir: Optional[str] = None
+
+        # Filename tracking
+        self.master_filename: Optional[str] = None
+        self.hw_filename: Optional[str] = None
+        self.sw_filename: Optional[str] = None
+        self.ups_filename: Optional[str] = None
 
     def load_master(self, filepath_or_df) -> int:
         """Load and index the master ERP file."""
@@ -727,21 +734,18 @@ class InventoryComparator:
         }
 
     def autosave(self, path: Optional[str] = None):
-        """Persist current session to disk automatically."""
+        """Persist current session state to disk atomically."""
         if path:
             self.autosave_path = path
         if not self.autosave_path:
             return
         try:
-            # Serialize raw DataFrames if present to preserve exact custom columns
-            raw_dfs = {}
-            for k, df in [("hw", self.hw_df), ("sw", self.sw_df), ("ups", self.ups_df)]:
-                if df is not None and isinstance(df, pd.DataFrame) and not df.empty:
-                    try:
-                        raw_dfs[k] = df.to_dict(orient="split")
-                    except Exception:
-                        pass
-
+            filenames = {
+                "master": getattr(self, "master_filename", None),
+                "hw": getattr(self, "hw_filename", None),
+                "sw": getattr(self, "sw_filename", None),
+                "ups": getattr(self, "ups_filename", None)
+            }
             data = {
                 "records": self.records,
                 "master_dict": self.master_dict,
@@ -749,16 +753,24 @@ class InventoryComparator:
                 "changelog": self.changelog[-200:],
                 "undo_stack": self.undo_stack,
                 "redo_stack": self.redo_stack,
-                "raw_dfs": raw_dfs,
+                "filenames": filenames,
                 "saved_at": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             dirname = os.path.dirname(os.path.abspath(self.autosave_path))
             if dirname:
                 os.makedirs(dirname, exist_ok=True)
-            with open(self.autosave_path, "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False)
-        except Exception:
-            pass
+            tmp_path = self.autosave_path + ".tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp_path, self.autosave_path)
+        except Exception as e:
+            try:
+                from logger_util import get_system_logger
+                get_system_logger().error(f"Autosave failed: {e}", component="AUTOSAVE", exc_info=True)
+            except Exception:
+                pass
 
     def load_autosave(self, path: str) -> bool:
         """Restore session from autosave file if exists."""
@@ -775,30 +787,33 @@ class InventoryComparator:
             self.undo_stack = data.get("undo_stack", [])
             self.redo_stack = data.get("redo_stack", [])
 
-            # Restore DataFrames if serialized
-            raw_dfs = data.get("raw_dfs", {})
-            if "hw" in raw_dfs:
-                try:
-                    self.hw_df = pd.DataFrame(**raw_dfs["hw"])
-                except Exception:
-                    self.hw_df = None
-            if "sw" in raw_dfs:
-                try:
-                    self.sw_df = pd.DataFrame(**raw_dfs["sw"])
-                except Exception:
-                    self.sw_df = None
-            if "ups" in raw_dfs:
-                try:
-                    self.ups_df = pd.DataFrame(**raw_dfs["ups"])
-                except Exception:
-                    self.ups_df = None
+            filenames = data.get("filenames", {})
+            if filenames.get("master"): self.master_filename = filenames["master"]
+            if filenames.get("hw"): self.hw_filename = filenames["hw"]
+            if filenames.get("sw"): self.sw_filename = filenames["sw"]
+            if filenames.get("ups"): self.ups_filename = filenames["ups"]
+
+            # Load DataFrames from sources_dir if present
+            if self.sources_dir and os.path.exists(self.sources_dir):
+                for cat, attr in [("master", "master_df"), ("hw", "hw_df"), ("sw", "sw_df"), ("ups", "ups_df")]:
+                    src_file = os.path.join(self.sources_dir, f"source_{cat}.xlsx")
+                    if os.path.exists(src_file) and getattr(self, attr) is None:
+                        try:
+                            setattr(self, attr, pd.read_excel(src_file))
+                        except Exception:
+                            pass
 
             return bool(self.master_dict or any(len(v) > 0 for v in self.records.values()))
-        except Exception:
+        except Exception as e:
+            try:
+                from logger_util import get_system_logger
+                get_system_logger().error(f"Failed to load autosave from {path}: {e}", component="AUTOSAVE", exc_info=True)
+            except Exception:
+                pass
             return False
 
     def reset_session(self) -> bool:
-        """Clear all in-memory data and wipe autosave file."""
+        """Clear all in-memory data, wipe autosave file, and clean sources directory."""
         self.master_df = None
         self.master_dict = {}
         self.hw_df = None
@@ -809,9 +824,26 @@ class InventoryComparator:
         self.changelog = []
         self.undo_stack = []
         self.redo_stack = []
-        if self.autosave_path and os.path.exists(self.autosave_path):
-            try:
-                os.remove(self.autosave_path)
-            except Exception:
-                pass
+        self.master_filename = None
+        self.hw_filename = None
+        self.sw_filename = None
+        self.ups_filename = None
+
+        if self.autosave_path:
+            for p in (self.autosave_path, self.autosave_path + ".tmp"):
+                if os.path.exists(p):
+                    try:
+                        os.remove(p)
+                    except Exception:
+                        pass
+
+        if self.sources_dir and os.path.exists(self.sources_dir):
+            for fname in os.listdir(self.sources_dir):
+                fpath = os.path.join(self.sources_dir, fname)
+                try:
+                    if os.path.isfile(fpath):
+                        os.remove(fpath)
+                except Exception:
+                    pass
         return True
+
