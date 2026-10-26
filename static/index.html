@@ -342,7 +342,16 @@
                 <!-- Pagination Footer -->
                 <div class="table-pagination">
                     <div class="pagination-info">
-                        แสดงรายการที่ <span id="page-start">0</span> - <span id="page-end">0</span> จากทั้งหมด <span id="total-count">0</span> รายการ
+                        แสดงรายการที่ <strong id="page-start">0</strong> - <strong id="page-end">0</strong> จากทั้งหมด <strong id="total-count">0</strong> รายการ
+                    </div>
+                    <div class="pagination-page-size">
+                        <label for="select-page-size"><i class="fa-solid fa-list-ol"></i> แสดงต่อหน้า:</label>
+                        <select id="select-page-size" class="page-size-select" title="เลือกจำนวนรายการที่แสดงต่อหน้า">
+                            <option value="25" selected>25 รายการ</option>
+                            <option value="50">50 รายการ</option>
+                            <option value="100">100 รายการ</option>
+                            <option value="99999">แสดงทั้งหมด (All)</option>
+                        </select>
                     </div>
                     <div class="pagination-controls">
                         <button id="btn-prev-page" class="btn-page" disabled><i class="fa-solid fa-chevron-left"></i> ก่อนหน้า</button>
