@@ -733,6 +733,15 @@ class InventoryComparator:
         if not self.autosave_path:
             return
         try:
+            # Serialize raw DataFrames if present to preserve exact custom columns
+            raw_dfs = {}
+            for k, df in [("hw", self.hw_df), ("sw", self.sw_df), ("ups", self.ups_df)]:
+                if df is not None and isinstance(df, pd.DataFrame) and not df.empty:
+                    try:
+                        raw_dfs[k] = df.to_dict(orient="split")
+                    except Exception:
+                        pass
+
             data = {
                 "records": self.records,
                 "master_dict": self.master_dict,
@@ -740,6 +749,7 @@ class InventoryComparator:
                 "changelog": self.changelog[-200:],
                 "undo_stack": self.undo_stack,
                 "redo_stack": self.redo_stack,
+                "raw_dfs": raw_dfs,
                 "saved_at": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
             }
             dirname = os.path.dirname(os.path.abspath(self.autosave_path))
@@ -764,6 +774,25 @@ class InventoryComparator:
             self.changelog = data.get("changelog", [])
             self.undo_stack = data.get("undo_stack", [])
             self.redo_stack = data.get("redo_stack", [])
+
+            # Restore DataFrames if serialized
+            raw_dfs = data.get("raw_dfs", {})
+            if "hw" in raw_dfs:
+                try:
+                    self.hw_df = pd.DataFrame(**raw_dfs["hw"])
+                except Exception:
+                    self.hw_df = None
+            if "sw" in raw_dfs:
+                try:
+                    self.sw_df = pd.DataFrame(**raw_dfs["sw"])
+                except Exception:
+                    self.sw_df = None
+            if "ups" in raw_dfs:
+                try:
+                    self.ups_df = pd.DataFrame(**raw_dfs["ups"])
+                except Exception:
+                    self.ups_df = None
+
             return bool(self.master_dict or any(len(v) > 0 for v in self.records.values()))
         except Exception:
             return False
@@ -772,6 +801,9 @@ class InventoryComparator:
         """Clear all in-memory data and wipe autosave file."""
         self.master_df = None
         self.master_dict = {}
+        self.hw_df = None
+        self.sw_df = None
+        self.ups_df = None
         self.records = {"hw": [], "sw": [], "ups": []}
         self.summary = {}
         self.changelog = []
