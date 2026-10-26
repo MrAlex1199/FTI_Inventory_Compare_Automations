@@ -67,6 +67,7 @@ document.addEventListener("DOMContentLoaded", () => {
         pageCurrent: document.getElementById("page-current"),
         btnPrevPage: document.getElementById("btn-prev-page"),
         btnNextPage: document.getElementById("btn-next-page"),
+        selectPageSize: document.getElementById("select-page-size"),
 
         // Actions
         btnBatchQuickFix: document.getElementById("btn-batch-quick-fix"),
@@ -316,8 +317,8 @@ document.addEventListener("DOMContentLoaded", () => {
             if (!res.ok) throw new Error("Could not fetch records");
             const data = await res.json();
 
-            state.totalRecords = data.total_count || 0;
-            state.totalPages = Math.max(1, Math.ceil(state.totalRecords / state.pageSize));
+            state.totalRecords = Number(data.total ?? data.total_count ?? 0);
+            state.totalPages = Number(data.total_pages ?? Math.max(1, Math.ceil(state.totalRecords / state.pageSize)));
 
             renderTable(data.records || []);
             renderPagination();
@@ -447,13 +448,13 @@ document.addEventListener("DOMContentLoaded", () => {
         const start = total === 0 ? 0 : (state.page - 1) * state.pageSize + 1;
         const end = Math.min(total, state.page * state.pageSize);
 
-        elements.pageStart.textContent = start.toLocaleString();
-        elements.pageEnd.textContent = end.toLocaleString();
-        elements.totalCount.textContent = total.toLocaleString();
-        elements.pageCurrent.textContent = `หน้า ${state.page} / ${state.totalPages}`;
+        if (elements.pageStart) elements.pageStart.textContent = start.toLocaleString();
+        if (elements.pageEnd) elements.pageEnd.textContent = end.toLocaleString();
+        if (elements.totalCount) elements.totalCount.textContent = total.toLocaleString();
+        if (elements.pageCurrent) elements.pageCurrent.textContent = `หน้า ${state.page} / ${state.totalPages}`;
 
-        elements.btnPrevPage.disabled = state.page <= 1;
-        elements.btnNextPage.disabled = state.page >= state.totalPages;
+        if (elements.btnPrevPage) elements.btnPrevPage.disabled = state.page <= 1;
+        if (elements.btnNextPage) elements.btnNextPage.disabled = state.page >= state.totalPages;
     }
 
     // =========================================================================
@@ -721,19 +722,30 @@ document.addEventListener("DOMContentLoaded", () => {
         loadRecords();
     });
 
-    // Pagination
-    elements.btnPrevPage.addEventListener("click", () => {
-        if (state.page > 1) {
-            state.page--;
+    // Pagination Controls
+    if (elements.btnPrevPage) {
+        elements.btnPrevPage.addEventListener("click", () => {
+            if (state.page > 1) {
+                state.page--;
+                loadRecords();
+            }
+        });
+    }
+    if (elements.btnNextPage) {
+        elements.btnNextPage.addEventListener("click", () => {
+            if (state.page < state.totalPages) {
+                state.page++;
+                loadRecords();
+            }
+        });
+    }
+    if (elements.selectPageSize) {
+        elements.selectPageSize.addEventListener("change", (e) => {
+            state.pageSize = parseInt(e.target.value, 10) || 25;
+            state.page = 1;
             loadRecords();
-        }
-    });
-    elements.btnNextPage.addEventListener("click", () => {
-        if (state.page < state.totalPages) {
-            state.page++;
-            loadRecords();
-        }
-    });
+        });
+    }
 
     // Modal Close
     elements.btnCloseEdit.addEventListener("click", closeEditModal);
