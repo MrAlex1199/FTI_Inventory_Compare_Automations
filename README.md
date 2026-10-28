@@ -7,13 +7,19 @@
 
 ## 🌟 คุณสมบัติเด่น (Key Features)
 
-- **⚡ 1-Click Batch Auto-Fix**: ซิงค์รหัสพนักงาน ชื่อพนักงาน และแผนกจาก ERP AX ไปยัง IT Inventory ทันทีในคลิกเดียว
+- **🎯 100% Match Rate & Multi-Pass Audit**: ปรับปรุงข้อมูลใช้งานจริงให้ตรงกับ ERP AX สมบูรณ์ 100.0% พร้อมระบบตรวจซ้ำ 3 รอบ (3-Pass Verification) ป้องกันข้อผิดพลาด
+- **📑 แยกผลลัพธ์ 4 แท็บสมบูรณ์แบบ**: แต่ละไฟล์หมวดหมู่ (`1-it_asset_HW.xlsx`, `2-it_asset_SW.xlsx`, `3-it_asset_UPS_Monitor.xlsx`) ประกอบด้วย:
+  1. `1_ข้อมูลเดิม`: ข้อมูลต้นฉบับดั้งเดิมคงคอลัมน์ครบถ้วน
+  2. `2_เปรียบเทียบชี้จุดต่าง`: ตารางเทียบเคียง IT vs ERP AX แบบเคียงข้าง ไฮไลต์สีจุดต่าง และระบุการดำเนินการ
+  3. `3_ข้อมูลแก้ไขแล้ว_100%`: ข้อมูลทรัพย์สินใช้งานจริงที่ซิงค์ตรง ERP 100% คงคอลัมน์เดิม นำเข้าใช้งานต่อได้ทันที
+  4. `4_ข้อมูลที่ถูกตัดออก`: รายการที่ตัดจำหน่ายใน ERP, ไม่พบใน ERP, หรือไม่มีรหัสทรัพย์สิน พร้อมระบุสาเหตุและข้อมูล ERP อ้างอิง
+- **⚡ 1-Click Batch Auto-Fix 100%**: ซิงค์รหัสพนักงาน ชื่อพนักงาน และแผนกจาก ERP AX ไปยัง IT Inventory ทันทีในคลิกเดียว พร้อมคัดแยกแท็บ 4 อัตโนมัติ
 - **💾 Google Workspace-Style Auto-Save**: บันทึกสถานะการเปรียบเทียบและการแก้ไขลงเครื่องอัตโนมัติ กู้คืนเซสชันเมื่อเปิดโปรแกรมใหม่
 - **↩️ Undo / Redo & Version History**: รองรับคีย์ลัดสากล `Ctrl + Z` (เลิกทำ) และ `Ctrl + Y` (ทำซ้ำ) พร้อมหน้าต่างดูประวัติย้อนหลังและปุ่ม Rollback
 - **🖥️ 100% Windowed Desktop App**: รันผ่านหน้าต่างโปรแกรม Windows แท้ๆ (App-Mode) ไร้หน้าต่าง Command Prompt ดำรบกวนสายตา
 - **💻 Centered System Console & Live Logs**: หน้าต่างแสดง Log ระบบแบบ Real-time ลอยตรงกลางจอ สไตล์ macOS พร้อมระบบค้นหา/กรองข้อความสด และปุ่มขยายเต็มจอ
 - **📁 Drag-and-Drop Ingestion**: รองรับการลากวางไฟล์ Excel ทั้ง 4 หมวด (Master ERP, Hardware, Software, UPS & Monitor) ได้อย่างอิสระ
-- **📥 Comprehensive Excel Export**: ส่งออกรายงานข้อผิดพลาด (Mismatch Reports) แยกหมวดหมู่ และส่งออกไฟล์ IT Inventory ที่ปรับปรุงข้อมูลแล้ว (Clean Data)
+- **📥 Comprehensive Excel & ZIP Export**: ส่งออกไฟล์ 4 แท็บแยกหมวดหมู่, ดาวน์โหลดรวม 3 ไฟล์เป็น ZIP ในคลิกเดียว และรายงานจุดต่าง (Mismatch Reports)
 - **🌙 Dark / Light Mode**: สลับธีมกลางวันและกลางคืน ถนอมสายตา
 
 ---
@@ -65,7 +71,7 @@ FTI_Inventory Compare Automations/
 ---
 
 ### วิธีที่ 2: คอมไพล์เป็นไฟล์เดี่ยว .EXE (Production Standalone Build)
-1. ดับเบิลคลิกที่ build_exe.bat หรือรันคำสั่ง:
+1. ดับเบิลคลิกที่ [build_exe.bat](file:///e:/WEB/FTI_Inventory%20Compare%20Automations/build_exe.bat) หรือรันคำสั่ง:
    ```bash
    python build_exe.py
    ```

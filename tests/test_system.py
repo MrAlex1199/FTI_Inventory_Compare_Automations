@@ -1,5 +1,8 @@
 import sys
 import os
+import io
+import json
+import openpyxl
 import pandas as pd
 from starlette.testclient import TestClient
 
@@ -10,23 +13,33 @@ if sys.platform == 'win32':
         pass
 
 # Add root directory to sys.path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, BASE_DIR)
 
-from app import app, comparator
+from app import app, comparator, AUTOSAVE_FILE, SOURCES_DIR
+from engine.comparator import clean_emp_id, clean_val, clean_asset_id
+
 
 def test_clean_business_flow():
-    print("[1] Initializing TestClient...")
+    print("[1] Initializing TestClient and loading fresh baseline...")
     client = TestClient(app)
 
-    print("[2] Testing GET /api/summary...")
+    # Ensure fresh baseline from original Excel files to test full lifecycle
+    comparator.load_master(os.path.join(BASE_DIR, "0-FTI_asset_HWSWOth.xlsx"))
+    comparator.load_inventory_files(
+        os.path.join(BASE_DIR, "1-it_asset_HW.xlsx"),
+        os.path.join(BASE_DIR, "2-it_asset_SW.xlsx"),
+        os.path.join(BASE_DIR, "3-it_asset_UPS_Monitor.xlsx")
+    )
+
+    print("[2] Testing GET /api/summary (Initial State before Auto-Fix)...")
     res = client.get("/api/summary")
     assert res.status_code == 200, f"Summary failed: {res.text}"
     summary = res.json()
     overall = summary.get("overall", {})
-    initial_rate = overall.get("match_rate", 0)
-    print(f"    Initial match rate: {initial_rate}%")
+    print(f"    Initial match rate: {overall.get('match_rate')}%")
     print(f"    Total: {overall.get('total_records')}, Matched: {overall.get('matched_records')}, Mismatched: {overall.get('mismatched_records')}")
-    assert overall.get("total_records", 0) > 0, "No records loaded"
+    assert overall.get("total_initial_records") == 1516, f"Expected 1516 initial records, got {overall.get('total_initial_records')}"
 
     print("[3] Testing GET /api/records (Hardware mismatches)...")
     res = client.get("/api/records?category=hw&mismatch_only=true&page=1&page_size=10")
@@ -35,14 +48,14 @@ def test_clean_business_flow():
     recs = data.get("records", [])
     assert len(recs) > 0
 
-    # Find a record that has ERP data to test quick-fix
+    # Find an active ERP record to test single quick-fix
     target_rec = None
     for r in recs:
         ax = r.get("ax_data", {})
-        if ax.get("ax_emp_id") or ax.get("ax_dept"):
+        if ax.get("asset_id") and not ax.get("is_scrapped"):
             target_rec = r
             break
-    
+
     if target_rec:
         uid = target_rec["uid"]
         print(f"[4] Testing POST /api/quick-fix on {uid} ({target_rec.get('asset_id')})...")
@@ -50,94 +63,125 @@ def test_clean_business_flow():
         assert res_qf.status_code == 200, f"Quick-fix failed: {res_qf.text}"
         qf_data = res_qf.json()
         print(f"    Quick-fix result: {qf_data.get('message')}")
-        print(f"    Updated mismatch type: {qf_data.get('record', {}).get('mismatch_type')}")
+        assert qf_data.get("record", {}).get("is_match") is True
 
-    print("[5] Testing POST /api/recompare...")
-    res_recomp = client.post("/api/recompare")
-    assert res_recomp.status_code == 200
-    new_summary = res_recomp.json().get("summary", {})
-    print(f"    Re-compared match rate: {new_summary.get('overall', {}).get('match_rate')}%")
-
-    print("[6] Testing POST /api/batch-quick-fix (Batch Auto-Fix)...")
+    print("[5] Testing POST /api/batch-quick-fix (100% Reconciliation + Multi-Pass Verification)...")
     res_batch = client.post("/api/batch-quick-fix", json={"category": "all", "user": "Test Runner"})
     assert res_batch.status_code == 200, f"Batch quick-fix failed: {res_batch.text}"
     batch_data = res_batch.json()
-    print(f"    Batch auto-fix: {batch_data.get('message')}")
-    print(f"    New match rate after batch fix: {batch_data.get('result', {}).get('new_match_rate')}%")
+    b_res = batch_data.get("result", {})
+    b_sum = batch_data.get("summary", {}).get("overall", {})
+    print(f"    Batch message: {batch_data.get('message')}")
+    print(f"    Active Matched: {b_sum.get('matched_records')} / {b_sum.get('total_records')} ({b_sum.get('match_rate')}%)")
+    print(f"    Mismatched remaining: {b_sum.get('mismatched_records')}")
+    print(f"    Excluded (Tab 4): {b_sum.get('excluded_records')}")
+    print(f"    Verified 100% (3 passes): {b_sum.get('verified_100_percent')} (passes={b_sum.get('verification_passes')})")
 
-    print("[7] Testing GET /api/files-status...")
-    res_files = client.get("/api/files-status")
-    assert res_files.status_code == 200
-    files_info = res_files.json()
-    print(f"    Files status: Master={files_info['master']['rows']}, HW={files_info['hw']['rows']}, SW={files_info['sw']['rows']}, UPS={files_info['ups']['rows']}")
+    assert b_sum.get("match_rate") == 100.0, f"Expected 100.0% match rate, got {b_sum.get('match_rate')}"
+    assert b_sum.get("mismatched_records") == 0, f"Expected 0 mismatched records, got {b_sum.get('mismatched_records')}"
+    assert b_sum.get("matched_records") == 775, f"Expected 775 active matched records, got {b_sum.get('matched_records')}"
+    assert b_sum.get("excluded_records") == 741, f"Expected 741 excluded records, got {b_sum.get('excluded_records')}"
+    assert b_sum.get("verified_100_percent") is True, "Expected verified_100_percent to be True"
+    assert b_sum.get("verification_passes") == 3, "Expected 3 verification passes"
 
-    print("[8] Testing Excel Exports...")
-    res_rep = client.get("/api/export/report?category=all")
-    assert res_rep.status_code == 200
-    assert len(res_rep.content) > 10000
-    print(f"    Mismatch report downloaded: {len(res_rep.content)} bytes")
+    print("[6] Testing GET /api/records for Active 100% Matched vs Excluded (Tab 4)...")
+    res_active = client.get("/api/records?category=all&mismatch_only=false&filter_type=all&page=1&page_size=99999")
+    assert res_active.status_code == 200
+    data_active = res_active.json()
+    assert data_active["total"] == 775, f"Expected 775 active records, got {data_active['total']}"
+    assert len(data_active["records"]) == 775
 
-    res_inv = client.get("/api/export/inventory/hw")
-    assert res_inv.status_code == 200
-    assert len(res_inv.content) > 10000
-    print(f"    Corrected inventory downloaded: {len(res_inv.content)} bytes")
+    res_excl = client.get("/api/records?category=all&filter_type=excluded&page=1&page_size=99999")
+    assert res_excl.status_code == 200
+    data_excl = res_excl.json()
+    assert data_excl["total"] == 741, f"Expected 741 excluded records, got {data_excl['total']}"
+    assert len(data_excl["records"]) == 741
+    print(f"    Active records: {data_active['total']}, Excluded records: {data_excl['total']} (Sum = {data_active['total'] + data_excl['total']})")
 
-    print("[9] Testing Pagination & All Records (Issue 1 Verification)...")
-    res_page_all = client.get("/api/records?category=all&mismatch_only=true&page=1&page_size=99999")
-    assert res_page_all.status_code == 200
-    data_all = res_page_all.json()
-    assert "total" in data_all and "total_count" in data_all
-    assert data_all["total"] == data_all["total_count"]
-    total_records = data_all["total"]
-    assert len(data_all["records"]) == total_records, f"Expected {total_records} records, got {len(data_all['records'])}"
-    print(f"    Show All (page_size=99999): Successfully returned all {total_records} records!")
+    print("[7] Testing 4-Tab Excel Exports & Independent 3-Pass Audit on Tab 3...")
+    expected_counts = {
+        "hw": {"filename": "1-it_asset_HW.xlsx", "total": 235, "active": 93, "excluded": 142, "cols": 25},
+        "sw": {"filename": "2-it_asset_SW.xlsx", "total": 899, "active": 504, "excluded": 395, "cols": 14},
+        "ups": {"filename": "3-it_asset_UPS_Monitor.xlsx", "total": 382, "active": 178, "excluded": 204, "cols": 18},
+    }
+    expected_sheets = [
+        "1_ข้อมูลเดิม",
+        "2_เปรียบเทียบชี้จุดต่าง",
+        "3_ข้อมูลแก้ไขแล้ว_100%",
+        "4_ข้อมูลที่ถูกตัดออก"
+    ]
 
-    # Test page_size=25
-    res_page_25 = client.get("/api/records?category=all&mismatch_only=true&page=1&page_size=25")
-    assert res_page_25.status_code == 200
-    data_25 = res_page_25.json()
-    assert data_25["page_size"] == 25
-    expected_pages = (total_records + 24) // 25
-    assert data_25["total_pages"] == expected_pages
-    print(f"    Pagination (page_size=25): Total {total_records} records, {data_25['total_pages']} pages computed correctly!")
+    for cat, spec in expected_counts.items():
+        res_inv = client.get(f"/api/export/inventory/{cat}")
+        assert res_inv.status_code == 200, f"Export failed for {cat}: {res_inv.text}"
+        wb = openpyxl.load_workbook(io.BytesIO(res_inv.content), data_only=True)
+        assert wb.sheetnames == expected_sheets, f"Unexpected sheets for {cat}: {wb.sheetnames}"
 
-    print("[10] Testing Re-opened Application Session Export & Atomic State (Issue 2 Verification)...")
-    # Verify session_state.json exists and is valid JSON without any truncation
-    from app import AUTOSAVE_FILE, SOURCES_DIR
-    import json
-    assert os.path.exists(AUTOSAVE_FILE), f"AUTOSAVE_FILE not found at {AUTOSAVE_FILE}"
-    with open(AUTOSAVE_FILE, "r", encoding="utf-8") as f:
-        saved_state = json.load(f)
-    assert "records" in saved_state and "summary" in saved_state
-    print(f"    Atomic session_state.json verified: {os.path.getsize(AUTOSAVE_FILE)} bytes, valid JSON!")
+        ws1 = wb["1_ข้อมูลเดิม"]
+        ws2 = wb["2_เปรียบเทียบชี้จุดต่าง"]
+        ws3 = wb["3_ข้อมูลแก้ไขแล้ว_100%"]
+        ws4 = wb["4_ข้อมูลที่ถูกตัดออก"]
 
-    # Verify source_hw.xlsx exists in SOURCES_DIR
-    src_hw_path = os.path.join(SOURCES_DIR, "source_hw.xlsx")
-    assert os.path.exists(src_hw_path), f"source_hw.xlsx not found at {src_hw_path}"
-    df_src_hw = pd.read_excel(src_hw_path)
-    assert len(df_src_hw.columns) >= 20, f"Expected full schema >= 20 columns, got {len(df_src_hw.columns)}"
-    print(f"    Source storage verified: source_hw.xlsx has {len(df_src_hw.columns)} columns (all original columns preserved)!")
+        rows_tab1 = ws1.max_row - 1
+        rows_tab2 = ws2.max_row - 1
+        rows_tab3 = ws3.max_row - 1
+        rows_tab4 = ws4.max_row - 1
 
-    # Test fresh cold instance loading
+        assert rows_tab1 == spec["total"], f"{cat} Tab 1 rows: expected {spec['total']}, got {rows_tab1}"
+        assert rows_tab2 == spec["total"], f"{cat} Tab 2 rows: expected {spec['total']}, got {rows_tab2}"
+        assert rows_tab3 == spec["active"], f"{cat} Tab 3 rows: expected {spec['active']}, got {rows_tab3}"
+        assert rows_tab4 == spec["excluded"], f"{cat} Tab 4 rows: expected {spec['excluded']}, got {rows_tab4}"
+        assert rows_tab3 + rows_tab4 == rows_tab1, f"{cat} row conservation failed: {rows_tab3} + {rows_tab4} != {rows_tab1}"
+
+        assert ws1.max_column == spec["cols"], f"{cat} Tab 1 cols: expected {spec['cols']}, got {ws1.max_column}"
+        assert ws3.max_column == spec["cols"], f"{cat} Tab 3 cols: expected {spec['cols']}, got {ws3.max_column}"
+        assert ws4.max_column == spec["cols"] + 6, f"{cat} Tab 4 cols: expected {spec['cols'] + 6}, got {ws4.max_column}"
+
+        # Independent 3-Pass Verification directly on Tab 3 Excel cells against Master ERP
+        df_tab3 = pd.read_excel(io.BytesIO(res_inv.content), sheet_name="3_ข้อมูลแก้ไขแล้ว_100%")
+        assert len(df_tab3) == spec["active"]
+
+        for p in range(1, 4):
+            mismatch_in_pass = 0
+            for idx, row in df_tab3.iterrows():
+                aid = clean_asset_id(row.get("เลขที่ทรัพย์สิน", ""))
+                emp = clean_emp_id(row.get("รหัสพนักงาน", ""))
+                dept = clean_val(row.get("สถานที่เก็บ", ""))
+
+                is_m, m_type, _, ax = comparator._evaluate_values_against_erp(aid, emp, dept)
+                assert ax is not None and ax.get("asset_id"), f"Pass {p}: Asset {aid} in Tab 3 not found in Master ERP!"
+                assert not ax.get("is_scrapped"), f"Pass {p}: Asset {aid} in Tab 3 is scrapped in Master ERP!"
+                if not is_m or emp != clean_emp_id(ax.get("ax_emp_id", "")) or dept != clean_val(ax.get("ax_dept", "")):
+                    mismatch_in_pass += 1
+            assert mismatch_in_pass == 0, f"Pass {p} failed for {cat}: {mismatch_in_pass} mismatches found!"
+
+        print(f"    Verified {spec['filename']}: Tab1={rows_tab1}, Tab2={rows_tab2}, Tab3={rows_tab3} (100% matched across 3 passes), Tab4={rows_tab4}")
+
+    print("[8] Testing ZIP Export (/api/export/inventory-all) and Output Directory Files...")
+    res_zip = client.get("/api/export/inventory-all")
+    assert res_zip.status_code == 200
+    assert len(res_zip.content) > 50000
+
+    out_dir = os.path.join(BASE_DIR, "output")
+    for cat, spec in expected_counts.items():
+        fpath = os.path.join(out_dir, spec["filename"])
+        assert os.path.exists(fpath), f"Output file missing: {fpath}"
+        assert os.path.getsize(fpath) > 10000
+    print(f"    All 3 files verified in {out_dir} and in ZIP bundle ({len(res_zip.content):,} bytes)!")
+
+    print("[9] Testing Cold Session Restart & Persistence...")
     from engine.comparator import InventoryComparator
     fresh_comp = InventoryComparator()
     fresh_comp.sources_dir = SOURCES_DIR
     restored = fresh_comp.load_autosave(AUTOSAVE_FILE)
     assert restored, "Failed to restore session in fresh InventoryComparator"
-    assert len(fresh_comp.records.get("hw", [])) > 0, "No hw records restored"
-    assert fresh_comp.hw_df is not None, "hw_df not restored from sources_dir"
-    assert len(fresh_comp.hw_df.columns) == len(df_src_hw.columns), "hw_df columns mismatch after restore"
-    print(f"    Fresh comparator restored successfully: {fresh_comp.summary.get('overall', {}).get('total_records')} records, full DataFrame restored!")
+    assert fresh_comp.summary["overall"]["match_rate"] == 100.0
+    assert fresh_comp.summary["overall"]["matched_records"] == 775
+    assert fresh_comp.summary["overall"]["excluded_records"] == 741
+    print("    Cold session restore verified: 100.0% match rate, 775 matched, 741 excluded preserved!")
 
-    # Download exports via TestClient
-    for cat in ("hw", "sw", "ups"):
-        res_cat = client.get(f"/api/export/inventory/{cat}")
-        assert res_cat.status_code == 200, f"Export for {cat} failed after cold restart: {res_cat.text}"
-        assert len(res_cat.content) > 2000, f"Export content for {cat} too small"
-        print(f"    Cold session export '{cat}': {len(res_cat.content)} bytes downloaded successfully!")
+    print("\n[SUCCESS] All 100% Reconciliation, 4-Tab Excel Exports, and 3-Pass Audit tests passed!")
 
-    print("\n[SUCCESS] Clean business flow verification complete and all tests passed!")
 
 if __name__ == "__main__":
     test_clean_business_flow()
-

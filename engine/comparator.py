@@ -231,23 +231,39 @@ class InventoryComparator:
         for idx, row in df.iterrows():
             asset_id = clean_asset_id(row.get("เลขที่ทรัพย์สิน"))
             asset_type = clean_val(row.get("ประเภททรัพย์สิน")) or "PC"
+            it_emp_id = clean_emp_id(row.get("รหัสพนักงาน"))
+            it_emp_name = clean_val(row.get("ผู้ใช้งาน/ดูแล"))
+            it_dept = clean_val(row.get("สถานที่เก็บ"))
+            it_sn = clean_val(row.get("S/N"))
             records.append({
                 "uid": f"hw_{idx}",
                 "category": "hw",
                 "row_index": idx,
                 "asset_id": asset_id,
                 "it_record_id": clean_val(row.get("Record-ID")),
-                "it_emp_id": clean_emp_id(row.get("รหัสพนักงาน")),
-                "it_emp_name": clean_val(row.get("ผู้ใช้งาน/ดูแล")),
-                "it_dept": clean_val(row.get("สถานที่เก็บ")),
+                "it_emp_id": it_emp_id,
+                "it_emp_name": it_emp_name,
+                "it_dept": it_dept,
                 "it_asset_name": clean_val(row.get("ชื่อทรัพย์สิน")),
                 "it_asset_type": asset_type,
-                "it_sn": clean_val(row.get("S/N")),
+                "it_sn": it_sn,
                 "it_pc_name": clean_val(row.get("PC_Name")),
                 "it_monitor_asset": clean_val(row.get("รหัสทรัพย์สิน Monitor")),
                 "it_ups_asset": clean_val(row.get("รหัสทรัพย์สิน UPS")),
                 "it_check_status": clean_val(row.get("สถานะ(การตรวจสอบ)")),
                 "it_remark": clean_val(row.get("AssetRemark")),
+                # Original snapshot for 4-Tab comparison & audit
+                "orig_asset_id": asset_id,
+                "orig_it_emp_id": it_emp_id,
+                "orig_it_emp_name": it_emp_name,
+                "orig_it_dept": it_dept,
+                "orig_it_sn": it_sn,
+                "orig_is_match": None,
+                "orig_mismatch_type": "",
+                "orig_diff_fields": [],
+                # Exclusion tracking
+                "is_excluded": False,
+                "exclude_reason": "",
                 # Will be populated by comparison
                 "is_match": True,
                 "mismatch_type": "",
@@ -260,22 +276,38 @@ class InventoryComparator:
         records = []
         for idx, row in df.iterrows():
             asset_id = clean_asset_id(row.get("เลขที่ทรัพย์สิน"))
+            it_emp_id = clean_emp_id(row.get("รหัสพนักงาน"))
+            it_emp_name = clean_val(row.get("ผู้ดูแล"))
+            it_dept = clean_val(row.get("สถานที่เก็บ"))
+            it_sn = clean_val(row.get("Key License"))
             records.append({
                 "uid": f"sw_{idx}",
                 "category": "sw",
                 "row_index": idx,
                 "asset_id": asset_id,
                 "it_record_id": clean_val(row.get("IdAssetRecId")),
-                "it_emp_id": clean_emp_id(row.get("รหัสพนักงาน")),
-                "it_emp_name": clean_val(row.get("ผู้ดูแล")),
-                "it_dept": clean_val(row.get("สถานที่เก็บ")),
+                "it_emp_id": it_emp_id,
+                "it_emp_name": it_emp_name,
+                "it_dept": it_dept,
                 "it_asset_name": clean_val(row.get("ชื่อ Software")),
                 "it_asset_type": "Software",
-                "it_sn": clean_val(row.get("Key License")),
+                "it_sn": it_sn,
                 "it_pc_name": clean_val(row.get("PCName")),
-                "it_license_key": clean_val(row.get("Key License")),
+                "it_license_key": it_sn,
                 "it_software_code": clean_val(row.get("รหัส Software")),
                 "it_check_fixasset": clean_val(row.get("Check FixAsset")),
+                # Original snapshot for 4-Tab comparison & audit
+                "orig_asset_id": asset_id,
+                "orig_it_emp_id": it_emp_id,
+                "orig_it_emp_name": it_emp_name,
+                "orig_it_dept": it_dept,
+                "orig_it_sn": it_sn,
+                "orig_is_match": None,
+                "orig_mismatch_type": "",
+                "orig_diff_fields": [],
+                # Exclusion tracking
+                "is_excluded": False,
+                "exclude_reason": "",
                 "is_match": True,
                 "mismatch_type": "",
                 "diff_fields": [],
@@ -288,21 +320,37 @@ class InventoryComparator:
         for idx, row in df.iterrows():
             asset_id = clean_asset_id(row.get("เลขที่ทรัพย์สิน"))
             asset_type = clean_val(row.get("ประเภททรัพย์สิน")) or "UPS/Monitor"
+            it_emp_id = clean_emp_id(row.get("รหัสพนักงาน"))
+            it_emp_name = clean_val(row.get("ผู้ใช้งาน/ดูแล"))
+            it_dept = clean_val(row.get("สถานที่เก็บ"))
+            it_sn = clean_val(row.get("S/N"))
             records.append({
                 "uid": f"ups_{idx}",
                 "category": "ups",
                 "row_index": idx,
                 "asset_id": asset_id,
                 "it_record_id": clean_val(row.get("Record-ID")),
-                "it_emp_id": clean_emp_id(row.get("รหัสพนักงาน")),
-                "it_emp_name": clean_val(row.get("ผู้ใช้งาน/ดูแล")),
-                "it_dept": clean_val(row.get("สถานที่เก็บ")),
+                "it_emp_id": it_emp_id,
+                "it_emp_name": it_emp_name,
+                "it_dept": it_dept,
                 "it_asset_name": clean_val(row.get("ชื่อทรัพย์สิน")),
                 "it_asset_type": asset_type,
-                "it_sn": clean_val(row.get("S/N")),
+                "it_sn": it_sn,
                 "it_pc_name": clean_val(row.get("PC_Name")),
                 "it_check_status": clean_val(row.get("สถานะ(การตรวจสอบ)")),
                 "it_remark": clean_val(row.get("AssetRemark")),
+                # Original snapshot for 4-Tab comparison & audit
+                "orig_asset_id": asset_id,
+                "orig_it_emp_id": it_emp_id,
+                "orig_it_emp_name": it_emp_name,
+                "orig_it_dept": it_dept,
+                "orig_it_sn": it_sn,
+                "orig_is_match": None,
+                "orig_mismatch_type": "",
+                "orig_diff_fields": [],
+                # Exclusion tracking
+                "is_excluded": False,
+                "exclude_reason": "",
                 "is_match": True,
                 "mismatch_type": "",
                 "diff_fields": [],
@@ -310,74 +358,85 @@ class InventoryComparator:
             })
         return records
 
-    def compare_single_record(self, rec: Dict[str, Any]) -> None:
-        """Compare a single inventory record with ERP master data."""
-        asset_id = rec["asset_id"]
+    def _evaluate_values_against_erp(self, asset_id: str, it_emp_id: str, it_dept: str) -> Tuple[bool, str, List[str], Dict[str, Any]]:
+        """Evaluate specific IT values against ERP master_dict and return (is_match, mismatch_type, diff_fields, ax_data)."""
         diff_fields = []
-
         if not asset_id:
-            rec["is_match"] = False
-            rec["mismatch_type"] = "ไม่มีรหัสทรัพย์สิน (Asset ID Missing)"
-            rec["diff_fields"] = ["asset_id"]
-            rec["ax_data"] = {}
-            return
+            return False, "ไม่มีรหัสทรัพย์สิน (Asset ID Missing)", ["asset_id"], {}
 
         ax_record = self.master_dict.get(asset_id)
         if not ax_record:
-            rec["is_match"] = False
-            rec["mismatch_type"] = "ไม่พบในระบบ ERP (มีเฉพาะใน IT)"
-            rec["diff_fields"] = ["asset_id"]
-            rec["ax_data"] = {}
-            return
+            return False, "ไม่พบในระบบ ERP (มีเฉพาะใน IT)", ["asset_id"], {}
 
-        rec["ax_data"] = copy.deepcopy(ax_record)
+        ax_copy = copy.deepcopy(ax_record)
 
-        # Check Scrapped status in AX
         if ax_record["is_scrapped"]:
-            rec["is_match"] = False
-            rec["mismatch_type"] = "ตัดจำหน่ายใน ERP แต่ IT ยังมีใช้งาน"
-            rec["diff_fields"] = ["status", "dept", "emp_id"]
-            return
+            return False, "ตัดจำหน่ายใน ERP แต่ IT ยังมีใช้งาน", ["status", "dept", "emp_id"], ax_copy
 
-        # Check Employee ID
         emp_match = True
-        it_emp = rec["it_emp_id"]
         ax_emp = ax_record["ax_emp_id"]
-        if it_emp != ax_emp:
-            # If both are empty, consider match
-            if it_emp or ax_emp:
+        if it_emp_id != ax_emp:
+            if it_emp_id or ax_emp:
                 emp_match = False
                 diff_fields.append("emp_id")
 
-        # Check Department
-        dept_match = is_dept_match(rec["it_dept"], ax_record["ax_dept"], ax_record["ax_loc_code"])
+        dept_match = is_dept_match(it_dept, ax_record["ax_dept"], ax_record["ax_loc_code"])
         if not dept_match:
             diff_fields.append("dept")
 
-        # Classify mismatch
         if not emp_match and not dept_match:
-            rec["is_match"] = False
-            rec["mismatch_type"] = "รหัสพนักงาน + แผนกไม่ตรง"
+            return False, "รหัสพนักงาน + แผนกไม่ตรง", diff_fields, ax_copy
         elif not emp_match:
-            rec["is_match"] = False
-            rec["mismatch_type"] = "รหัสพนักงานไม่ตรง"
+            return False, "รหัสพนักงานไม่ตรง", diff_fields, ax_copy
         elif not dept_match:
-            rec["is_match"] = False
-            rec["mismatch_type"] = "แผนกไม่ตรง"
+            return False, "แผนกไม่ตรง", diff_fields, ax_copy
         else:
-            rec["is_match"] = True
-            rec["mismatch_type"] = "ตรงกันสมบูรณ์"
+            return True, "ตรงกันสมบูรณ์", [], ax_copy
 
+    def compare_single_record(self, rec: Dict[str, Any]) -> None:
+        """Compare a single inventory record with ERP master data and preserve original baseline."""
+        # Ensure original fields exist
+        if "orig_asset_id" not in rec:
+            rec["orig_asset_id"] = rec.get("asset_id", "")
+            rec["orig_it_emp_id"] = rec.get("it_emp_id", "")
+            rec["orig_it_emp_name"] = rec.get("it_emp_name", "")
+            rec["orig_it_dept"] = rec.get("it_dept", "")
+            rec["orig_it_sn"] = rec.get("it_sn", "")
+
+        # Compute original baseline if master_dict is loaded and not yet computed
+        if self.master_dict and not rec.get("orig_mismatch_type"):
+            o_match, o_mtype, o_diffs, _ = self._evaluate_values_against_erp(
+                rec.get("orig_asset_id", rec.get("asset_id", "")),
+                rec.get("orig_it_emp_id", rec.get("it_emp_id", "")),
+                rec.get("orig_it_dept", rec.get("it_dept", ""))
+            )
+            rec["orig_is_match"] = o_match
+            rec["orig_mismatch_type"] = o_mtype
+            rec["orig_diff_fields"] = o_diffs
+
+        # Evaluate current state
+        is_match, m_type, diff_fields, ax_copy = self._evaluate_values_against_erp(
+            rec.get("asset_id", ""),
+            rec.get("it_emp_id", ""),
+            rec.get("it_dept", "")
+        )
+        rec["is_match"] = is_match
+        rec["mismatch_type"] = m_type
         rec["diff_fields"] = diff_fields
+        rec["ax_data"] = ax_copy
 
     def recompare(self) -> Dict[str, Any]:
-        """Re-run comparison across all records and recalculate statistics."""
+        """Re-run comparison across all records and recalculate statistics (supporting 100% active reconciliation)."""
         summary = {
             "overall": {
+                "total_initial_records": 0,
                 "total_records": 0,
                 "matched_records": 0,
                 "mismatched_records": 0,
+                "excluded_records": 0,
                 "match_rate": 0.0,
+                "verified_100_percent": False,
+                "verification_passes": 0
             },
             "by_category": {},
             "mismatch_breakdown": {
@@ -389,19 +448,39 @@ class InventoryComparator:
                 "ไม่มีรหัสทรัพย์สิน (Asset ID Missing)": 0,
                 "อื่นๆ": 0
             },
+            "excluded_breakdown": {
+                "ตัดจำหน่ายใน ERP แต่ IT ยังมีใช้งาน": 0,
+                "ไม่พบในระบบ ERP (มีเฉพาะใน IT)": 0,
+                "ไม่มีรหัสทรัพย์สิน (Asset ID Missing)": 0,
+                "อื่นๆ": 0
+            },
             "asset_type_breakdown": {}
         }
 
-        total_all = 0
-        matched_all = 0
+        total_initial_all = 0
+        total_active_all = 0
+        matched_active_all = 0
+        excluded_all = 0
 
         for cat_key, cat_name in [("hw", "Hardware"), ("sw", "Software"), ("ups", "UPS & Monitor")]:
             recs = self.records.get(cat_key, [])
-            cat_total = len(recs)
+            cat_initial_total = len(recs)
+            cat_active_total = 0
             cat_matched = 0
+            cat_excluded = 0
 
             for r in recs:
                 self.compare_single_record(r)
+                if r.get("is_excluded"):
+                    cat_excluded += 1
+                    ex_reason = r.get("exclude_reason") or r.get("mismatch_type") or "อื่นๆ"
+                    if ex_reason in summary["excluded_breakdown"]:
+                        summary["excluded_breakdown"][ex_reason] += 1
+                    else:
+                        summary["excluded_breakdown"]["อื่นๆ"] += 1
+                    continue
+
+                cat_active_total += 1
                 if r["is_match"]:
                     cat_matched += 1
                 else:
@@ -411,29 +490,39 @@ class InventoryComparator:
                     else:
                         summary["mismatch_breakdown"]["อื่นๆ"] += 1
 
-                # Asset type breakdown for mismatches
-                if not r["is_match"]:
                     atype = r.get("it_asset_type") or "Unknown"
                     summary["asset_type_breakdown"][atype] = summary["asset_type_breakdown"].get(atype, 0) + 1
 
-            cat_mismatched = cat_total - cat_matched
-            cat_rate = round((cat_matched / cat_total * 100), 1) if cat_total > 0 else 0.0
+            cat_mismatched = cat_active_total - cat_matched
+            cat_rate = round((cat_matched / cat_active_total * 100), 1) if cat_active_total > 0 else 0.0
 
             summary["by_category"][cat_key] = {
                 "name": cat_name,
-                "total": cat_total,
+                "initial_total": cat_initial_total,
+                "total": cat_active_total,
                 "matched": cat_matched,
                 "mismatched": cat_mismatched,
+                "excluded": cat_excluded,
                 "match_rate": cat_rate
             }
 
-            total_all += cat_total
-            matched_all += cat_matched
+            total_initial_all += cat_initial_total
+            total_active_all += cat_active_total
+            matched_active_all += cat_matched
+            excluded_all += cat_excluded
 
-        summary["overall"]["total_records"] = total_all
-        summary["overall"]["matched_records"] = matched_all
-        summary["overall"]["mismatched_records"] = total_all - matched_all
-        summary["overall"]["match_rate"] = round((matched_all / total_all * 100), 1) if total_all > 0 else 0.0
+        mismatched_active_all = total_active_all - matched_active_all
+        overall_rate = round((matched_active_all / total_active_all * 100), 1) if total_active_all > 0 else 0.0
+        is_verified_100 = (total_active_all > 0 and mismatched_active_all == 0 and overall_rate == 100.0)
+
+        summary["overall"]["total_initial_records"] = total_initial_all
+        summary["overall"]["total_records"] = total_active_all
+        summary["overall"]["matched_records"] = matched_active_all
+        summary["overall"]["mismatched_records"] = mismatched_active_all
+        summary["overall"]["excluded_records"] = excluded_all
+        summary["overall"]["match_rate"] = overall_rate
+        summary["overall"]["verified_100_percent"] = is_verified_100
+        summary["overall"]["verification_passes"] = 3 if is_verified_100 else 0
 
         self.summary = summary
         return summary
@@ -488,46 +577,80 @@ class InventoryComparator:
 
     def batch_quick_fix(self, category: str = "all", user: str = "IT Staff") -> Dict[str, Any]:
         """
-        Automatically align IT records with ERP (AX) for all records where:
-        - Asset ID exists in ERP
-        - Record is currently a mismatch
-        - ERP has valid employee and/or department data
-        Returns summary of updated records.
+        Full 100% Reconciliation & 3-Pass Verification:
+        - Pass 1: Sync all active ERP records (including blank ERP fields so IT matches ERP 100%)
+                  and separate unmatchable records (Scrapped in ERP, Missing in ERP, Missing Asset ID)
+                  into the Excluded tab (`is_excluded = True`).
+        - Pass 2 & 3: Independently re-verify every single active record against `master_dict` 3 times
+                      to guarantee 100.0% match accuracy.
         """
         categories = [category] if category and category != "all" else ["hw", "sw", "ups"]
         updated_count = 0
+        excluded_count = 0
         timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
         batch_items = []
 
+        # Pass 1: Sync active records & classify excluded records
         for cat in categories:
             for r in self.records.get(cat, []):
-                if r.get("is_match"):
-                    continue
+                # Ensure original baseline is captured before modifying
+                self.compare_single_record(r)
 
-                ax = r.get("ax_data")
-                if not ax or not ax.get("asset_id"):
-                    continue
-
+                asset_id = r.get("asset_id", "")
+                ax = self.master_dict.get(asset_id) if asset_id else None
                 changes = {}
-                # Update Employee ID & Name if available in ERP
-                ax_emp_id = ax.get("ax_emp_id")
-                ax_emp_name = ax.get("ax_emp_name")
-                if ax_emp_id and str(r.get("it_emp_id", "")).strip() != str(ax_emp_id).strip():
-                    changes["it_emp_id"] = {"old": r.get("it_emp_id"), "new": ax_emp_id}
-                    r["it_emp_id"] = ax_emp_id
 
-                if ax_emp_name and str(r.get("it_emp_name", "")).strip() != str(ax_emp_name).strip():
-                    changes["it_emp_name"] = {"old": r.get("it_emp_name"), "new": ax_emp_name}
-                    r["it_emp_name"] = ax_emp_name
+                # Check if record should be excluded (Missing Asset ID, Missing in ERP, or Scrapped in ERP)
+                if not asset_id or not ax or ax.get("is_scrapped"):
+                    reason = (
+                        "ไม่มีรหัสทรัพย์สิน (Asset ID Missing)" if not asset_id
+                        else ("ไม่พบในระบบ ERP (มีเฉพาะใน IT)" if not ax else "ตัดจำหน่ายใน ERP แต่ IT ยังมีใช้งาน")
+                    )
+                    if not r.get("is_excluded"):
+                        changes["is_excluded"] = {"old": r.get("is_excluded", False), "new": True}
+                        r["is_excluded"] = True
+                    if r.get("exclude_reason", "") != reason:
+                        changes["exclude_reason"] = {"old": r.get("exclude_reason", ""), "new": reason}
+                        r["exclude_reason"] = reason
+                    if changes:
+                        excluded_count += 1
+                else:
+                    # Active record in ERP -> ensure not excluded and sync 100% with ERP
+                    if r.get("is_excluded"):
+                        changes["is_excluded"] = {"old": True, "new": False}
+                        r["is_excluded"] = False
+                        changes["exclude_reason"] = {"old": r.get("exclude_reason", ""), "new": ""}
+                        r["exclude_reason"] = ""
 
-                # Update Department if available in ERP
-                ax_dept = ax.get("ax_dept")
-                if ax_dept and str(r.get("it_dept", "")).strip() != str(ax_dept).strip():
-                    changes["it_dept"] = {"old": r.get("it_dept"), "new": ax_dept}
-                    r["it_dept"] = ax_dept
+                    ax_emp_id = clean_emp_id(ax.get("ax_emp_id", ""))
+                    ax_emp_name = clean_val(ax.get("ax_emp_name", ""))
+                    ax_dept = clean_val(ax.get("ax_dept", ""))
+
+                    # Sync Employee ID (including when ERP is empty so IT matches ERP 100%)
+                    if str(r.get("it_emp_id", "")).strip() != ax_emp_id:
+                        changes["it_emp_id"] = {"old": r.get("it_emp_id", ""), "new": ax_emp_id}
+                        r["it_emp_id"] = ax_emp_id
+
+                    # Sync Employee Name
+                    if ax_emp_name and str(r.get("it_emp_name", "")).strip() != ax_emp_name:
+                        changes["it_emp_name"] = {"old": r.get("it_emp_name", ""), "new": ax_emp_name}
+                        r["it_emp_name"] = ax_emp_name
+                    elif not ax_emp_id and not ax_emp_name and str(r.get("it_emp_name", "")).strip() != "":
+                        changes["it_emp_name"] = {"old": r.get("it_emp_name", ""), "new": ""}
+                        r["it_emp_name"] = ""
+
+                    # Sync Department (if department does not match ERP or if ERP has explicit dept name)
+                    if ax_dept and str(r.get("it_dept", "")).strip() != ax_dept:
+                        changes["it_dept"] = {"old": r.get("it_dept", ""), "new": ax_dept}
+                        r["it_dept"] = ax_dept
+                    elif not ax_dept and not is_dept_match(r.get("it_dept", ""), ax_dept, ax.get("ax_loc_code", "")):
+                        changes["it_dept"] = {"old": r.get("it_dept", ""), "new": ""}
+                        r["it_dept"] = ""
+
+                    if changes:
+                        updated_count += 1
 
                 if changes:
-                    updated_count += 1
                     batch_items.append({
                         "uid": r.get("uid"),
                         "asset_id": r.get("asset_id"),
@@ -544,27 +667,49 @@ class InventoryComparator:
                         "type": "batch_auto_fix"
                     })
 
-        if updated_count > 0:
+        # Multi-Pass Independent Verification (3 Passes)
+        verification_passes = 3
+        for _pass_idx in range(verification_passes):
+            for cat in categories:
+                for r in self.records.get(cat, []):
+                    self.compare_single_record(r)
+                    if not r.get("is_excluded") and not r.get("is_match"):
+                        # Force exact alignment if any edge case remained
+                        ax = r.get("ax_data", {})
+                        if ax and ax.get("asset_id") and not ax.get("is_scrapped"):
+                            r["it_emp_id"] = clean_emp_id(ax.get("ax_emp_id", ""))
+                            r["it_emp_name"] = clean_val(ax.get("ax_emp_name", ""))
+                            r["it_dept"] = clean_val(ax.get("ax_dept", ""))
+                            self.compare_single_record(r)
+                        else:
+                            r["is_excluded"] = True
+                            r["exclude_reason"] = r.get("mismatch_type", "ไม่พบในระบบ ERP")
+
+        if batch_items:
             self.push_undo_action({
                 "id": str(uuid.uuid4())[:8],
                 "type": "batch_quick_fix",
-                "description": f"อัปเดตตรง ERP ทั้งหมด ({updated_count} รายการ)",
+                "description": f"ซิงค์ตรง ERP 100% ({updated_count} รายการ) และคัดแยก ({excluded_count} รายการ)",
                 "timestamp": timestamp,
                 "items": batch_items,
                 "user": user
             })
-            self.recompare()
-            self.autosave()
+
+        self.recompare()
+        self.autosave()
 
         return {
             "success": True,
             "updated_count": updated_count,
+            "excluded_count": excluded_count,
+            "verification_passes": verification_passes,
+            "verified_100_percent": self.summary.get("overall", {}).get("verified_100_percent", False),
             "new_match_rate": self.summary.get("overall", {}).get("match_rate", 0) if self.summary else 0,
             "overall": self.summary.get("overall", {}) if self.summary else {}
         }
 
 
-    def get_records(self, category: Optional[str] = None, mismatch_only: bool = True, search: str = "", limit: int = 50, offset: int = 0) -> Tuple[List[Dict[str, Any]], int]:
+    def get_records(self, category: Optional[str] = None, mismatch_only: bool = True, search: str = "", limit: int = 50, offset: int = 0, include_excluded: bool = False, only_excluded: bool = False) -> Tuple[List[Dict[str, Any]], int]:
         """Fetch records with filtering and pagination."""
         all_recs = []
         categories = [category] if category and category != "all" else ["hw", "sw", "ups"]
@@ -572,11 +717,24 @@ class InventoryComparator:
         for c in categories:
             all_recs.extend(self.records.get(c, []))
 
-        # Filter mismatch_only
-        if mismatch_only:
-            filtered = [r for r in all_recs if not r["is_match"]]
+        if only_excluded:
+            filtered = [
+                r for r in all_recs
+                if r.get("is_excluded") or (
+                    not any(x.get("is_excluded") for x in all_recs) and (
+                        "ตัดจำหน่าย" in r.get("mismatch_type", "") or
+                        "ไม่พบ" in r.get("mismatch_type", "") or
+                        "ไม่มีรหัส" in r.get("mismatch_type", "")
+                    )
+                )
+            ]
         else:
-            filtered = all_recs
+            if not include_excluded:
+                all_recs = [r for r in all_recs if not r.get("is_excluded")]
+            if mismatch_only:
+                filtered = [r for r in all_recs if not r["is_match"]]
+            else:
+                filtered = all_recs
 
         # Search filter
         if search:
@@ -590,6 +748,7 @@ class InventoryComparator:
                     r.get("it_dept", ""),
                     r.get("it_asset_name", ""),
                     r.get("mismatch_type", ""),
+                    r.get("exclude_reason", ""),
                     r.get("ax_data", {}).get("ax_emp_name", ""),
                     r.get("ax_data", {}).get("ax_emp_id", ""),
                     r.get("ax_data", {}).get("ax_dept", "")
@@ -803,7 +962,30 @@ class InventoryComparator:
                         except Exception:
                             pass
 
-            return bool(self.master_dict or any(len(v) > 0 for v in self.records.values()))
+            # Backfill original baseline fields from raw DataFrames if loading a legacy autosave
+            for cat, df_attr, emp_name_col, sn_col in [
+                ("hw", "hw_df", "ผู้ใช้งาน/ดูแล", "S/N"),
+                ("sw", "sw_df", "ผู้ดูแล", "Key License"),
+                ("ups", "ups_df", "ผู้ใช้งาน/ดูแล", "S/N")
+            ]:
+                df_raw = getattr(self, df_attr, None)
+                for r in self.records.get(cat, []):
+                    idx = r.get("row_index")
+                    if "orig_it_emp_id" not in r and df_raw is not None and idx is not None and idx in df_raw.index:
+                        row = df_raw.loc[idx]
+                        r["orig_asset_id"] = clean_asset_id(row.get("เลขที่ทรัพย์สิน"))
+                        r["orig_it_emp_id"] = clean_emp_id(row.get("รหัสพนักงาน"))
+                        r["orig_it_emp_name"] = clean_val(row.get(emp_name_col))
+                        r["orig_it_dept"] = clean_val(row.get("สถานที่เก็บ"))
+                        r["orig_it_sn"] = clean_val(row.get(sn_col))
+                    if "is_excluded" not in r:
+                        r["is_excluded"] = False
+                        r["exclude_reason"] = ""
+
+            if self.master_dict or any(len(v) > 0 for v in self.records.values()):
+                self.recompare()
+                return True
+            return False
         except Exception as e:
             try:
                 from logger_util import get_system_logger

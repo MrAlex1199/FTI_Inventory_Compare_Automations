@@ -78,32 +78,35 @@
                 <!-- Cluster 3: Primary Action (Export Dropdown) -->
                 <div class="dropdown">
                     <button id="btn-export-dropdown" class="btn btn-action-green">
-                        <i class="fa-solid fa-download"></i> ดาวน์โหลดรายงาน Excel <i class="fa-solid fa-chevron-down"></i>
+                        <i class="fa-solid fa-download"></i> ดาวน์โหลดไฟล์ผลลัพธ์ (4 แท็บ) <i class="fa-solid fa-chevron-down"></i>
                     </button>
                     <div class="dropdown-menu">
-                        <div class="dropdown-heading">รายงานสรุปจุดที่ไม่ตรง (Mismatch Reports)</div>
-                        <a href="/api/export/report?category=all" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-file-excel text-red"></i> <strong>รายงาน Mismatch รวมทุกประเภท (.xlsx)</strong>
+                        <div class="dropdown-heading">ไฟล์ผลลัพธ์แยก 3 หมวด (ครบ 4 แท็บ: เดิม / ชี้จุดต่าง / แก้ไข 100% / ตัดออก)</div>
+                        <a href="/api/export/inventory-all" target="_blank" class="dropdown-item">
+                            <i class="fa-solid fa-file-zipper text-green"></i> <strong>ดาวน์โหลดครบทั้ง 3 ไฟล์พร้อมกัน (.zip)</strong>
                         </a>
-                        <a href="/api/export/report?category=hw" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-desktop text-blue"></i> รายงาน Hardware Mismatch (.xlsx)
-                        </a>
-                        <a href="/api/export/report?category=sw" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-code text-cyan"></i> รายงาน Software Mismatch (.xlsx)
-                        </a>
-                        <a href="/api/export/report?category=ups" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-car-battery text-amber"></i> รายงาน UPS & Monitor Mismatch (.xlsx)
-                        </a>
-                        <div class="dropdown-sep"></div>
-                        <div class="dropdown-heading">ไฟล์ IT Inventory ที่ปรับปรุงข้อมูลแล้ว (Clean Data)</div>
                         <a href="/api/export/inventory/hw" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-file-pen text-green"></i> ดาวน์โหลด Corrected Hardware (.xlsx)
+                            <i class="fa-solid fa-desktop text-blue"></i> <strong>1-it_asset_HW.xlsx</strong> (ครบ 4 แท็บ)
                         </a>
                         <a href="/api/export/inventory/sw" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-file-pen text-green"></i> ดาวน์โหลด Corrected Software (.xlsx)
+                            <i class="fa-solid fa-code text-cyan"></i> <strong>2-it_asset_SW.xlsx</strong> (ครบ 4 แท็บ)
                         </a>
                         <a href="/api/export/inventory/ups" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-file-pen text-green"></i> ดาวน์โหลด Corrected UPS & Monitor (.xlsx)
+                            <i class="fa-solid fa-car-battery text-amber"></i> <strong>3-it_asset_UPS_Monitor.xlsx</strong> (ครบ 4 แท็บ)
+                        </a>
+                        <div class="dropdown-sep"></div>
+                        <div class="dropdown-heading">รายงานสรุปภาพรวม (Summary Reports)</div>
+                        <a href="/api/export/report?category=all" target="_blank" class="dropdown-item">
+                            <i class="fa-solid fa-file-excel text-red"></i> รายงานสรุปรวมทุกประเภท (.xlsx)
+                        </a>
+                        <a href="/api/export/report?category=hw" target="_blank" class="dropdown-item">
+                            <i class="fa-solid fa-desktop text-blue"></i> รายงานสรุป Hardware (.xlsx)
+                        </a>
+                        <a href="/api/export/report?category=sw" target="_blank" class="dropdown-item">
+                            <i class="fa-solid fa-code text-cyan"></i> รายงานสรุป Software (.xlsx)
+                        </a>
+                        <a href="/api/export/report?category=ups" target="_blank" class="dropdown-item">
+                            <i class="fa-solid fa-car-battery text-amber"></i> รายงานสรุป UPS & Monitor (.xlsx)
                         </a>
                     </div>
                 </div>
@@ -201,8 +204,11 @@
                         <div class="score-bar-fill" id="score-bar-fill" style="width: 0%"></div>
                     </div>
                     <div class="score-subtext" id="score-subtext">ตรงกัน <strong id="kpi-matched-count">0</strong> จาก <span id="kpi-total-records">0</span> รายการ</div>
+                    <div id="verified-badge-banner" style="display:none; margin-top: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(16, 185, 129, 0.14); color: #059669; font-size: 12px; font-weight: 600;">
+                        <i class="fa-solid fa-shield-halved"></i> ตรวจซ้ำ 3 รอบสำเร็จ: ข้อมูลใช้งานจริงตรงกัน 100.0%
+                    </div>
                     <button class="btn btn-card-batch" id="btn-card-batch-trigger">
-                        <i class="fa-solid fa-bolt"></i> 1-Click Auto-Fix ข้อมูลที่ตรง ERP
+                        <i class="fa-solid fa-bolt"></i> 1-Click Auto-Fix 100% (ซิงค์ ERP + แยกแท็บ 4)
                     </button>
                 </div>
 
@@ -213,7 +219,7 @@
                             <div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div>
                             <div class="kpi-info">
                                 <div class="kpi-val text-green" id="kpi-matched-records">0</div>
-                                <div class="kpi-title">ตรงกันสมบูรณ์</div>
+                                <div class="kpi-title" id="kpi-matched-title">ตรงกันสมบูรณ์ (แท็บ 3)</div>
                             </div>
                         </div>
                         <div class="kpi-box box-mismatched">
@@ -224,10 +230,10 @@
                             </div>
                         </div>
                         <div class="kpi-box box-scrapped">
-                            <div class="kpi-icon"><i class="fa-solid fa-ban"></i></div>
+                            <div class="kpi-icon"><i class="fa-solid fa-filter-circle-xmark"></i></div>
                             <div class="kpi-info">
                                 <div class="kpi-val text-amber" id="kpi-scrapped-records">0</div>
-                                <div class="kpi-title">ตัดจำหน่ายใน ERP</div>
+                                <div class="kpi-title" id="kpi-scrapped-title">ตัดออก / ตัดจำหน่าย (แท็บ 4)</div>
                             </div>
                         </div>
                     </div>
@@ -306,12 +312,13 @@
             <!-- Secondary Filter Pills -->
             <div class="filter-pills-row">
                 <span class="filter-pill-label">กรองประเภท:</span>
-                <button class="filter-pill active" data-filter="all">ทั้งหมด</button>
+                <button class="filter-pill active" data-filter="all">ทั้งหมด (ใช้งานจริง)</button>
                 <button class="filter-pill" data-filter="both">รหัสพนักงาน + แผนกไม่ตรง</button>
                 <button class="filter-pill" data-filter="emp">รหัสพนักงานไม่ตรง</button>
                 <button class="filter-pill" data-filter="dept">แผนกไม่ตรง</button>
                 <button class="filter-pill" data-filter="scrapped">ตัดจำหน่ายใน ERP</button>
                 <button class="filter-pill" data-filter="missing">ไม่พบใน ERP</button>
+                <button class="filter-pill" data-filter="excluded"><i class="fa-solid fa-filter-circle-xmark"></i> ข้อมูลที่ถูกตัดออก (แท็บ 4)</button>
             </div>
 
             <!-- Table Container -->

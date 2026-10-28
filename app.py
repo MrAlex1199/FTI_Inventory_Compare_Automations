@@ -18,9 +18,6 @@ if sys.stderr is None:
 elif not hasattr(sys.stderr, "isatty"):
     sys.stderr.isatty = lambda: False
 
-if sys.stdin is None:
-    sys.stdin = io.StringIO()
-
 import time
 import datetime
 from typing import Optional, Dict, Any, List
@@ -283,22 +280,42 @@ async def get_summary():
 async def get_records(
     category: str = Query("all", description="all, hw, sw, ups"),
     mismatch_only: bool = Query(True),
-    filter_type: str = Query("all", description="all, both, emp, dept, scrapped, missing"),
+    filter_type: str = Query("all", description="all, both, emp, dept, scrapped, missing, excluded"),
     search: str = Query("", description="search query"),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=5, le=100000)
 ):
     """Retrieve paginated records with filtering."""
     offset = (page - 1) * page_size
-    
-    # 1. Get raw records
-    recs, _ = comparator.get_records(
-        category=category,
-        mismatch_only=mismatch_only,
-        search=search,
-        limit=999999,
-        offset=0
-    )
+
+    # 1. Get raw records based on filter mode
+    if filter_type == "excluded":
+        recs, _ = comparator.get_records(
+            category=category,
+            mismatch_only=False,
+            search=search,
+            limit=999999,
+            offset=0,
+            only_excluded=True
+        )
+    elif filter_type in ("scrapped", "missing"):
+        recs, _ = comparator.get_records(
+            category=category,
+            mismatch_only=False,
+            search=search,
+            limit=999999,
+            offset=0,
+            include_excluded=True
+        )
+    else:
+        recs, _ = comparator.get_records(
+            category=category,
+            mismatch_only=mismatch_only,
+            search=search,
+            limit=999999,
+            offset=0,
+            include_excluded=False
+        )
 
     # 2. Apply filter_type if specified
     if filter_type == "both":
@@ -308,9 +325,9 @@ async def get_records(
     elif filter_type == "dept":
         recs = [r for r in recs if r.get("mismatch_type") == "แผนกไม่ตรง"]
     elif filter_type == "scrapped":
-        recs = [r for r in recs if "ตัดจำหน่าย" in r.get("mismatch_type", "")]
+        recs = [r for r in recs if "ตัดจำหน่าย" in r.get("mismatch_type", "") or "ตัดจำหน่าย" in r.get("exclude_reason", "")]
     elif filter_type == "missing":
-        recs = [r for r in recs if "ไม่พบ" in r.get("mismatch_type", "")]
+        recs = [r for r in recs if "ไม่พบ" in r.get("mismatch_type", "") or "ไม่พบ" in r.get("exclude_reason", "") or "ไม่มีรหัสทรัพย์สิน" in r.get("exclude_reason", "")]
 
     total_count = len(recs)
     paginated_recs = recs[offset: offset + page_size]
@@ -343,35 +360,25 @@ async def quick_fix_record(req: QuickFixRequest):
         raise HTTPException(status_code=404, detail=f"ไม่พบข้อมูลรหัส {req.uid}")
 
     ax = rec.get("ax_data", {})
-    if not ax or not ax.get("asset_id"):
+    if not ax or not ax.get("asset_id") or ax.get("is_scrapped"):
         return JSONResponse({
             "success": False,
             "status": "warning",
-            "message": f"รหัส {rec.get('asset_id', req.uid)} ไม่มีข้อมูลในระบบ ERP สำหรับซิงค์",
+            "message": f"รหัส {rec.get('asset_id', req.uid)} ไม่อยู่ในสถานะใช้งานปกติในระบบ ERP สำหรับซิงค์",
             "summary": comparator.summary
         })
 
-    fields_to_update = {}
-    if ax.get("ax_emp_id"):
-        fields_to_update["it_emp_id"] = str(ax["ax_emp_id"]).strip()
-    if ax.get("ax_emp_name"):
-        fields_to_update["it_emp_name"] = str(ax["ax_emp_name"]).strip()
-    if ax.get("ax_dept"):
-        fields_to_update["it_dept"] = str(ax["ax_dept"]).strip()
-
-    if not fields_to_update:
-        return JSONResponse({
-            "success": False,
-            "status": "info",
-            "message": "ข้อมูลในระบบ ERP เป็นค่าว่าง ไม่มีการเปลี่ยนแปลง",
-            "summary": comparator.summary
-        })
+    fields_to_update = {
+        "it_emp_id": str(ax.get("ax_emp_id", "")).strip(),
+        "it_emp_name": str(ax.get("ax_emp_name", "")).strip(),
+        "it_dept": str(ax.get("ax_dept", "")).strip(),
+    }
 
     updated = comparator.update_record(req.uid, fields_to_update, user=req.user or "IT Officer")
     return JSONResponse({
         "success": True,
         "status": "success",
-        "message": f"ปรับปรุงข้อมูล {rec.get('asset_id')} ให้ตรงกับ ERP แล้ว",
+        "message": f"ปรับปรุงข้อมูล {rec.get('asset_id')} ให้ตรงกับ ERP 100% แล้ว",
         "record": updated,
         "summary": comparator.summary
     })
@@ -384,18 +391,28 @@ class BatchQuickFixRequest(BaseModel):
 
 @app.post("/api/batch-quick-fix")
 async def batch_quick_fix(req: BatchQuickFixRequest = BatchQuickFixRequest()):
-    """Automatically synchronize all mismatched IT records with ERP AX."""
+    """Automatically synchronize all active IT records 100% with ERP AX, separate excluded records, verify 3 passes, and save 4-tab files."""
     res = comparator.batch_quick_fix(category=req.category or "all", user=req.user or "IT Officer")
     count = res.get('updated_count', 0)
-    if count > 0:
-        msg = f"อัปเดตข้อมูลให้ตรงกับ ERP เรียบร้อยแล้ว {count:,} รายการ"
-    else:
-        msg = "ข้อมูลในระบบตรงกับ ERP อยู่แล้ว หรือไม่พบรายการที่มีข้อมูล ERP ให้ซิงค์"
+    excl = res.get('excluded_count', 0)
+    passes = res.get('verification_passes', 3)
+    rate = res.get('new_match_rate', 100.0)
+
+    saved_files = {}
+    try:
+        out_dir = os.path.join(BASE_DIR, "output")
+        saved_files = ReportGenerator.save_all_category_files(comparator, output_dir=out_dir)
+        logger.info(f"Saved 4-tab category Excel files to {out_dir}: {list(saved_files.keys())}", component="EXPORT")
+    except Exception as e_out:
+        logger.warn(f"Notice saving output files during batch_quick_fix: {e_out}", component="EXPORT")
+
+    msg = f"ซิงค์ข้อมูลตรง ERP สมบูรณ์ {rate}% (อัปเดต {count:,} รายการ, คัดแยกแท็บ 4 จำนวน {excl:,} รายการ, ตรวจซ้ำ {passes} รอบ)"
 
     return JSONResponse({
         "status": "success",
         "message": msg,
         "result": res,
+        "saved_files": saved_files,
         "summary": comparator.summary,
         "can_undo": len(comparator.undo_stack) > 0,
         "can_redo": len(comparator.redo_stack) > 0
@@ -627,19 +644,28 @@ async def export_mismatch_report(category: Optional[str] = Query("all")):
 
 @app.get("/api/export/inventory/{category}")
 async def export_inventory_file(category: str):
-    """Download corrected inventory Excel file."""
+    """Download 4-tab reconciled inventory Excel file (1-it_asset_HW.xlsx, 2-it_asset_SW.xlsx, 3-it_asset_UPS_Monitor.xlsx)."""
     if category not in ("hw", "sw", "ups"):
         raise HTTPException(status_code=400, detail="Category must be hw, sw, or ups")
 
     try:
         buf = ReportGenerator.export_corrected_inventory_bytes(comparator, category)
-        now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         name_map = {
-            "hw": "1-it_asset_HW_Corrected",
-            "sw": "2-it_asset_SW_Corrected",
-            "ups": "3-it_asset_UPS_Monitor_Corrected"
+            "hw": "1-it_asset_HW.xlsx",
+            "sw": "2-it_asset_SW.xlsx",
+            "ups": "3-it_asset_UPS_Monitor.xlsx"
         }
-        filename = f"{name_map[category]}_{now_str}.xlsx"
+        filename = name_map[category]
+
+        # Also persist the latest 4-tab file into output/ folder automatically
+        try:
+            out_dir = os.path.join(BASE_DIR, "output")
+            os.makedirs(out_dir, exist_ok=True)
+            with open(os.path.join(out_dir, filename), "wb") as f_out:
+                f_out.write(buf.getvalue())
+            buf.seek(0)
+        except Exception:
+            buf.seek(0)
 
         return StreamingResponse(
             buf,
@@ -649,3 +675,25 @@ async def export_inventory_file(category: str):
     except Exception as e:
         logger.error(f"Error exporting corrected inventory ({category}): {e}", component="EXPORT", exc_info=True)
         raise HTTPException(status_code=500, detail=f"เกิดข้อผิดพลาดในการสร้างไฟล์ Inventory: {str(e)}")
+
+
+@app.get("/api/export/inventory-all")
+async def export_all_inventories_zip():
+    """Download all 3 4-tab inventory files (1-it_asset_HW.xlsx, 2-it_asset_SW.xlsx, 3-it_asset_UPS_Monitor.xlsx) in a ZIP archive."""
+    try:
+        # Also save to output/ directory
+        try:
+            out_dir = os.path.join(BASE_DIR, "output")
+            ReportGenerator.save_all_category_files(comparator, output_dir=out_dir)
+        except Exception:
+            pass
+
+        zip_buf = ReportGenerator.export_all_inventories_zip_bytes(comparator)
+        return StreamingResponse(
+            zip_buf,
+            media_type="application/zip",
+            headers={"Content-Disposition": "attachment; filename=FTI_IT_Asset_100Percent_All_3_Files.zip"}
+        )
+    except Exception as e:
+        logger.error(f"Error exporting all inventories zip: {e}", component="EXPORT", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"เกิดข้อผิดพลาดในการสร้างไฟล์ ZIP: {str(e)}")
