@@ -1,891 +1,748 @@
-// FTI IT Asset Inventory Compare System - UI/UX Pro Max Frontend Engine
+// FTI IT Asset Inventory Compare System - UI/UX Pro Max Engine (v2.0)
+// Complete Workspace Architecture: Dynamic Spreadsheet Inspector + Manual Compare
 
 document.addEventListener("DOMContentLoaded", () => {
     // Application State
     const state = {
-        category: "all",
-        filterType: "all",
-        mismatchOnly: true,
-        searchQuery: "",
-        page: 1,
-        pageSize: 25,
-        totalPages: 1,
-        totalRecords: 0,
-        currentRecord: null,
-        summary: null,
+        currentView: "files", // 'files', 'hw', 'sw', 'ups', 'summary'
+        activeCategory: "hw",
+        gridFilter: "all",
+        gridSearch: "",
+        gridPage: 1,
+        gridPageSize: 50,
+        selectedRecord: null,
+        systemState: null,
         theme: localStorage.getItem("fti_theme") || "light"
     };
 
     // DOM Elements Cache
     const elements = {
-        // Theme
+        // Theme & App Navigation
         themeToggle: document.getElementById("btn-theme-toggle"),
+        navItems: document.querySelectorAll(".nav-item"),
+        viewPanels: document.querySelectorAll(".view-panel"),
+        currentViewTitle: document.getElementById("current-view-title"),
+        currentViewDesc: document.getElementById("current-view-desc"),
 
-        // Summary & Score
-        kpiMatchPercent: document.getElementById("kpi-match-percent"),
-        scoreBarFill: document.getElementById("score-bar-fill"),
-        kpiMatchedCount: document.getElementById("kpi-matched-count"),
-        kpiTotalRecords: document.getElementById("kpi-total-records"),
-        kpiMatchedRecords: document.getElementById("kpi-matched-records"),
-        kpiMismatchedRecords: document.getElementById("kpi-mismatched-records"),
-        kpiScrappedRecords: document.getElementById("kpi-scrapped-records"),
+        // Nav Status Dots
+        dotHw: document.getElementById("dot-nav-hw"),
+        dotSw: document.getElementById("dot-nav-sw"),
+        dotUps: document.getElementById("dot-nav-ups"),
 
-        // Breakdown bars
-        hwMatchPercent: document.getElementById("hw-match-percent"),
-        hwProgressFill: document.getElementById("hw-progress-fill"),
-        hwMatchedVal: document.getElementById("hw-matched-val"),
-        hwMismatchedVal: document.getElementById("hw-mismatched-val"),
+        // Autosave & Tools
+        autosaveStatus: document.getElementById("autosave-status"),
+        autosaveText: document.getElementById("autosave-text"),
+        btnUndo: document.getElementById("btn-undo"),
+        btnRedo: document.getElementById("btn-redo"),
+        btnHistory: document.getElementById("btn-history"),
+        btnExitApp: document.getElementById("btn-exit-app"),
+        btnOpenSettings: document.getElementById("btn-open-settings"),
 
-        swMatchPercent: document.getElementById("sw-match-percent"),
-        swProgressFill: document.getElementById("sw-progress-fill"),
-        swMatchedVal: document.getElementById("sw-matched-val"),
-        swMismatchedVal: document.getElementById("sw-mismatched-val"),
-
-        upsMatchPercent: document.getElementById("ups-match-percent"),
-        upsProgressFill: document.getElementById("ups-progress-fill"),
-        upsMatchedVal: document.getElementById("ups-matched-val"),
-        upsMismatchedVal: document.getElementById("ups-mismatched-val"),
-
-        // Tab counts
-        tabCntAll: document.getElementById("tab-cnt-all"),
-        tabCntHw: document.getElementById("tab-cnt-hw"),
-        tabCntSw: document.getElementById("tab-cnt-sw"),
-        tabCntUps: document.getElementById("tab-cnt-ups"),
-
-        // Table & Search
-        tableBody: document.getElementById("table-body"),
-        searchInput: document.getElementById("search-input"),
-        btnClearSearch: document.getElementById("btn-clear-search"),
-        chkMismatchOnly: document.getElementById("chk-mismatch-only"),
-        catTabs: document.querySelectorAll(".cat-tab"),
-        filterPills: document.querySelectorAll(".filter-pill"),
-
-        // Pagination
-        pageStart: document.getElementById("page-start"),
-        pageEnd: document.getElementById("page-end"),
-        totalCount: document.getElementById("total-count"),
-        pageCurrent: document.getElementById("page-current"),
-        btnPrevPage: document.getElementById("btn-prev-page"),
-        btnNextPage: document.getElementById("btn-next-page"),
-        selectPageSize: document.getElementById("select-page-size"),
-
-        // Actions
-        btnBatchQuickFix: document.getElementById("btn-batch-quick-fix"),
-        btnCardBatchTrigger: document.getElementById("btn-card-batch-trigger"),
-        btnRecompare: document.getElementById("btn-recompare"),
-        btnExportDropdown: document.getElementById("btn-export-dropdown"),
-        dropdownWrapper: document.querySelector(".dropdown"),
-
-        // Dropzones
+        // File Cards & Badges
+        filebadgeMaster: document.getElementById("filebadge-master"),
+        filebadgeHw: document.getElementById("filebadge-hw"),
+        filebadgeSw: document.getElementById("filebadge-sw"),
+        filebadgeUps: document.getElementById("filebadge-ups"),
+        filenameMaster: document.getElementById("filename-master"),
+        filenameHw: document.getElementById("filename-hw"),
+        filenameSw: document.getElementById("filename-sw"),
+        filenameUps: document.getElementById("filename-ups"),
         dropzoneMaster: document.getElementById("dropzone-master"),
         dropzoneHw: document.getElementById("dropzone-hw"),
         dropzoneSw: document.getElementById("dropzone-sw"),
         dropzoneUps: document.getElementById("dropzone-ups"),
-
         fileInputMaster: document.getElementById("file-input-master"),
         fileInputHw: document.getElementById("file-input-hw"),
         fileInputSw: document.getElementById("file-input-sw"),
         fileInputUps: document.getElementById("file-input-ups"),
 
-        // Modal Edit
-        modalEdit: document.getElementById("modal-edit"),
-        btnCloseEdit: document.getElementById("btn-close-edit"),
-        btnCancelEdit: document.getElementById("btn-cancel-edit"),
-        btnSaveEdit: document.getElementById("btn-save-edit"),
-        btnCopyAx: document.getElementById("btn-copy-ax"),
-        editUid: document.getElementById("edit-uid"),
-        editAssetIdDisplay: document.getElementById("edit-asset-id-display"),
-        editTypeDisplay: document.getElementById("edit-type-display"),
-        editMismatchText: document.getElementById("edit-mismatch-text"),
-        refAxName: document.getElementById("ref-ax-name"),
-        refAxEmp: document.getElementById("ref-ax-emp"),
-        refAxDept: document.getElementById("ref-ax-dept"),
-        refAxStatus: document.getElementById("ref-ax-status"),
-        editItEmpId: document.getElementById("edit-it-emp-id"),
-        editItEmpName: document.getElementById("edit-it-emp-name"),
-        editItDept: document.getElementById("edit-it-dept"),
-        editItSn: document.getElementById("edit-it-sn"),
-        editItAssetId: document.getElementById("edit-it-asset-id"),
+        // Workspace Controls
+        btnRunCompare: document.getElementById("btn-run-compare"),
+        btnRunAutoFix: document.getElementById("btn-run-autofix"),
+        btnExportCategory: document.getElementById("btn-export-category"),
+        workspaceStatusBadge: document.getElementById("workspace-status-badge"),
+        categoryKpiBar: document.getElementById("category-kpi-bar"),
+        catKpiMatchRate: document.getElementById("cat-kpi-match-rate"),
+        catKpiMatched: document.getElementById("cat-kpi-matched"),
+        catKpiMismatched: document.getElementById("cat-kpi-mismatched"),
+        catKpiExcluded: document.getElementById("cat-kpi-excluded"),
+        catKpiUserEdited: document.getElementById("cat-kpi-user-edited"),
 
-        // Toast
-        toast: document.getElementById("toast"),
-        toastMsg: document.getElementById("toast-msg"),
-        toastIcon: document.getElementById("toast-icon"),
+        // Spreadsheet Grid & Toolbar
+        gridFilterPills: document.querySelectorAll(".grid-filter-pill"),
+        gridSearchInput: document.getElementById("grid-search-input"),
+        spreadsheetTable: document.getElementById("spreadsheet-table"),
+        spreadsheetThead: document.getElementById("spreadsheet-thead"),
+        spreadsheetTbody: document.getElementById("spreadsheet-tbody"),
+        gridPaginationInfo: document.getElementById("grid-pagination-info"),
+        gridPageSize: document.getElementById("grid-page-size"),
+        btnGridPrev: document.getElementById("btn-grid-prev"),
+        btnGridNext: document.getElementById("btn-grid-next"),
+        gridPageCurrent: document.getElementById("grid-page-current"),
 
-        // Log Modal Elements
-        btnViewLogs: document.getElementById("btn-view-logs"),
+        // Side Panel
+        erpSidePanel: document.getElementById("erp-side-panel"),
+        sidePanelBody: document.getElementById("side-panel-body"),
+        btnCloseSidepanel: document.getElementById("btn-close-sidepanel"),
+
+        // Summary View Elements
+        sumRateHw: document.getElementById("sum-rate-hw"),
+        sumStateHw: document.getElementById("sum-state-hw"),
+        sumMatchedHw: document.getElementById("sum-matched-hw"),
+        sumMismatchedHw: document.getElementById("sum-mismatched-hw"),
+        sumExcludedHw: document.getElementById("sum-excluded-hw"),
+
+        sumRateSw: document.getElementById("sum-rate-sw"),
+        sumStateSw: document.getElementById("sum-state-sw"),
+        sumMatchedSw: document.getElementById("sum-matched-sw"),
+        sumMismatchedSw: document.getElementById("sum-mismatched-sw"),
+        sumExcludedSw: document.getElementById("sum-excluded-sw"),
+
+        sumRateUps: document.getElementById("sum-rate-ups"),
+        sumStateUps: document.getElementById("sum-state-ups"),
+        sumMatchedUps: document.getElementById("sum-matched-ups"),
+        sumMismatchedUps: document.getElementById("sum-mismatched-ups"),
+        sumExcludedUps: document.getElementById("sum-excluded-ups"),
+
+        // Modals & Toast
+        modalSettings: document.getElementById("modal-settings"),
+        btnCloseSettings: document.getElementById("btn-close-settings"),
+        btnDoneSettings: document.getElementById("btn-done-settings"),
+        btnSettingsNewSession: document.getElementById("btn-settings-new-session"),
+        btnSettingsOpenLogs: document.getElementById("btn-settings-open-logs"),
+
         modalLogs: document.getElementById("modal-logs"),
         btnCloseLogs: document.getElementById("btn-close-logs"),
         btnDoneLogs: document.getElementById("btn-done-logs"),
         btnRefreshLogs: document.getElementById("btn-refresh-logs"),
-        btnCopyLogs: document.getElementById("btn-copy-logs"),
         logContentArea: document.getElementById("log-content-area"),
-        logFilePath: document.getElementById("log-file-path"),
+        logSearchInput: document.getElementById("log-search-input"),
 
-        // Google Workspace-style MVP Tools
-        btnUndo: document.getElementById("btn-undo"),
-        btnRedo: document.getElementById("btn-redo"),
-        btnHistory: document.getElementById("btn-history"),
-        btnNewSession: document.getElementById("btn-new-session"),
-        btnExitApp: document.getElementById("btn-exit-app"),
-        autosaveStatus: document.getElementById("autosave-status"),
-        autosaveText: document.getElementById("autosave-text"),
         modalHistory: document.getElementById("modal-history"),
         btnCloseHistory: document.getElementById("btn-close-history"),
         btnDoneHistory: document.getElementById("btn-done-history"),
-        historyTimelineList: document.getElementById("history-timeline-list")
+        historyTimelineList: document.getElementById("history-timeline-list"),
+
+        toast: document.getElementById("toast"),
+        toastMsg: document.getElementById("toast-msg"),
+        toastIcon: document.getElementById("toast-icon")
     };
 
     // =========================================================================
-    // Theme Management (Light / Dark Mode)
+    // Theme Management
     // =========================================================================
     function applyTheme(theme) {
         state.theme = theme;
         document.documentElement.setAttribute("data-theme", theme);
         localStorage.setItem("fti_theme", theme);
         if (elements.themeToggle) {
-            elements.themeToggle.innerHTML = theme === "dark" 
-                ? '<i class="fa-solid fa-sun" style="color: #f59e0b;"></i>' 
+            elements.themeToggle.innerHTML = theme === "dark"
+                ? '<i class="fa-solid fa-sun" style="color: #f59e0b;"></i>'
                 : '<i class="fa-solid fa-moon"></i>';
         }
     }
-
     applyTheme(state.theme);
 
-    if (elements.themeToggle) {
-        elements.themeToggle.addEventListener("click", () => {
-            const nextTheme = state.theme === "dark" ? "light" : "dark";
-            applyTheme(nextTheme);
-            showToast(`สลับเป็น ${nextTheme === "dark" ? "Dark Mode" : "Light Mode"} เรียบร้อย`, "info");
-        });
-    }
+    elements.themeToggle.addEventListener("click", () => {
+        applyTheme(state.theme === "dark" ? "light" : "dark");
+    });
 
     // =========================================================================
-    // Toast Notification Utility
+    // Toast Notification
     // =========================================================================
-    let toastTimeout = null;
+    let toastTimer = null;
     function showToast(msg, type = "success") {
         if (!elements.toast) return;
-        clearTimeout(toastTimeout);
-
+        clearTimeout(toastTimer);
         elements.toastMsg.textContent = msg;
         const card = elements.toast.querySelector(".toast-card");
         card.className = `toast-card ${type}`;
 
-        if (type === "success") {
-            elements.toastIcon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
-        } else if (type === "error") {
-            elements.toastIcon.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
-        } else if (type === "warning") {
-            elements.toastIcon.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
-        } else {
-            elements.toastIcon.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
-        }
+        if (type === "success") elements.toastIcon.innerHTML = '<i class="fa-solid fa-circle-check"></i>';
+        else if (type === "error") elements.toastIcon.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i>';
+        else elements.toastIcon.innerHTML = '<i class="fa-solid fa-circle-info"></i>';
 
         elements.toast.style.display = "block";
-        toastTimeout = setTimeout(() => {
-            elements.toast.style.display = "none";
-        }, 3500);
+        toastTimer = setTimeout(() => { elements.toast.style.display = "none"; }, 3500);
     }
 
     // =========================================================================
-    // Data Loading & API Calls
+    // Navigation & View Switching
     // =========================================================================
-    async function loadFilesStatus() {
+    function switchView(viewName) {
+        state.currentView = viewName;
+        elements.navItems.forEach(item => {
+            item.classList.toggle("active", item.getAttribute("data-view") === viewName);
+        });
+
+        elements.viewPanels.forEach(p => p.classList.remove("active"));
+
+        if (viewName === "files") {
+            document.getElementById("view-files").classList.add("active");
+            elements.currentViewTitle.textContent = "ไฟล์ข้อมูลที่ใช้งาน (Data Sources)";
+            elements.currentViewDesc.textContent = "ตรวจสอบไฟล์ ERP Master และไฟล์ IT Inventory";
+        } else if (viewName === "summary") {
+            document.getElementById("view-summary").classList.add("active");
+            elements.currentViewTitle.textContent = "สรุปภาพรวมและดาวน์โหลด (Summary & Export)";
+            elements.currentViewDesc.textContent = "ภาพรวมผลการเปรียบเทียบและดาวน์โหลดผลลัพธ์แยกหมวดหรือรวม ZIP";
+            renderSummaryView();
+        } else if (["hw", "sw", "ups"].includes(viewName)) {
+            state.activeCategory = viewName;
+            document.getElementById("view-category").classList.add("active");
+            const names = { hw: "Hardware", sw: "Software", ups: "UPS & Monitor" };
+            elements.currentViewTitle.textContent = `Workspace: ${names[viewName]}`;
+            elements.currentViewDesc.textContent = `ตาราง Spreadsheet สำหรับตรวจสอบจุดต่างและแก้ไขข้อมูล ${names[viewName]} ครบทุกคอลัมน์`;
+            loadCategoryWorkspace(viewName);
+        }
+    }
+
+    elements.navItems.forEach(item => {
+        item.addEventListener("click", () => {
+            const view = item.getAttribute("data-view");
+            if (view) switchView(view);
+        });
+    });
+
+    document.querySelectorAll(".btn-nav-to-cat").forEach(btn => {
+        btn.addEventListener("click", () => {
+            const goto = btn.getAttribute("data-goto");
+            if (goto) switchView(goto);
+        });
+    });
+
+    // =========================================================================
+    // State Synchronization
+    // =========================================================================
+    async function fetchSystemState() {
         try {
-            const res = await fetch("/api/files-status");
+            const res = await fetch("/api/state");
             if (!res.ok) return;
             const data = await res.json();
-
-            const updateCard = (key, elName, elMeta, elBadge) => {
-                const info = data[key];
-                if (!info) return;
-                const nameEl = document.getElementById(elName);
-                const metaEl = document.getElementById(elMeta);
-                const badgeEl = document.getElementById(elBadge);
-
-                if (info.loaded && info.rows > 0) {
-                    if (nameEl) nameEl.textContent = info.filename || "ไฟล์ที่เลือก";
-                    if (metaEl) metaEl.textContent = `พบข้อมูลพร้อมใช้งาน: ${info.rows.toLocaleString()} รายการ`;
-                    if (badgeEl) {
-                        badgeEl.className = "file-status ready";
-                        badgeEl.innerHTML = '<i class="fa-solid fa-circle-check"></i> พร้อมใช้งาน';
-                    }
-                } else {
-                    if (metaEl) metaEl.textContent = "ยังไม่ได้ระบุไฟล์ (ลากไฟล์มาวางที่นี่ได้)";
-                    if (badgeEl) {
-                        badgeEl.className = "file-status empty";
-                        badgeEl.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> รอไฟล์';
-                    }
-                }
-            };
-
-            updateCard("master", "filename-master", "filemeta-master", "status-badge-master");
-            updateCard("hw", "filename-hw", "filemeta-hw", "status-badge-hw");
-            updateCard("sw", "filename-sw", "filemeta-sw", "status-badge-sw");
-            updateCard("ups", "filename-ups", "filemeta-ups", "status-badge-ups");
+            state.systemState = data;
+            renderSystemState(data);
         } catch (e) {
-            console.error("Load files status error:", e);
+            console.error("Fetch state error:", e);
         }
     }
 
-    async function loadSummary() {
-        try {
-            const res = await fetch("/api/summary");
-            if (!res.ok) throw new Error("Could not fetch summary data");
-            const data = await res.json();
-            state.summary = data;
+    function renderSystemState(data) {
+        const files = data.files || {};
+        const states = data.category_states || {};
 
-            const ov = data.overall || {};
-            const rate = ov.match_rate || 0;
-            const matched = ov.matched_records || 0;
-            const total = ov.total_records || 0;
-            const mismatched = ov.mismatched_records || 0;
-            const excluded = ov.excluded_records || 0;
-            const verified100 = Boolean(ov.verified_100_percent);
-            const passes = ov.verification_passes || 3;
+        // Update Nav status dots
+        const updateDot = (el, cat) => {
+            const st = states[cat] || "empty";
+            el.className = `nav-status-dot state-${st}`;
+        };
+        updateDot(elements.dotHw, "hw");
+        updateDot(elements.dotSw, "sw");
+        updateDot(elements.dotUps, "ups");
 
-            // Overall KPI
-            elements.kpiMatchPercent.textContent = `${rate}%`;
-            elements.scoreBarFill.style.width = `${Math.min(100, rate)}%`;
-            elements.kpiMatchedCount.textContent = matched.toLocaleString();
-            elements.kpiTotalRecords.textContent = total.toLocaleString();
-
-            const verifiedBanner = document.getElementById("verified-badge-banner");
-            if (verifiedBanner) {
-                if (verified100) {
-                    verifiedBanner.style.display = "block";
-                    verifiedBanner.innerHTML = `<i class="fa-solid fa-shield-halved"></i> ตรวจซ้ำ ${passes} รอบสำเร็จ: ข้อมูลใช้งานจริงตรงกัน 100.0% (${matched.toLocaleString()} รายการ, ตัดออกแท็บ 4 จำนวน ${excluded.toLocaleString()} รายการ)`;
+        // Update File Cards
+        const updateCard = (cat, badgeEl, filenameEl) => {
+            const info = files[cat];
+            if (!info || !info.loaded) {
+                badgeEl.className = "file-badge badge-empty";
+                badgeEl.textContent = "รอไฟล์";
+            } else {
+                const st = states[cat];
+                if (st === "compared") {
+                    badgeEl.className = "file-badge badge-ready";
+                    badgeEl.textContent = "เปรียบเทียบแล้ว";
+                } else if (st === "stale") {
+                    badgeEl.className = "file-badge badge-stale";
+                    badgeEl.textContent = "รอเปรียบเทียบใหม่";
                 } else {
-                    verifiedBanner.style.display = "none";
+                    badgeEl.className = "file-badge badge-ready";
+                    badgeEl.textContent = "พร้อมเปรียบเทียบ";
                 }
+                if (info.filename) filenameEl.textContent = info.filename;
             }
+        };
+        updateCard("master", elements.filebadgeMaster, elements.filenameMaster);
+        updateCard("hw", elements.filebadgeHw, elements.filenameHw);
+        updateCard("sw", elements.filebadgeSw, elements.filenameSw);
+        updateCard("ups", elements.filebadgeUps, elements.filenameUps);
 
-            // Dynamic color for score
-            if (rate >= 70) {
-                elements.kpiMatchPercent.style.color = "var(--green-success)";
-            } else if (rate >= 40) {
-                elements.kpiMatchPercent.style.color = "var(--amber-warn)";
-            } else {
-                elements.kpiMatchPercent.style.color = "var(--blue-primary)";
-            }
+        // Undo/Redo tools
+        elements.btnUndo.disabled = !data.can_undo;
+        elements.btnRedo.disabled = !data.can_redo;
 
-            elements.kpiMatchedRecords.textContent = matched.toLocaleString();
-            elements.kpiMismatchedRecords.textContent = mismatched.toLocaleString();
-
-            const scrapped = (data.mismatch_breakdown && data.mismatch_breakdown["ตัดจำหน่ายใน ERP แต่ IT ยังมีใช้งาน"]) || 0;
-            const scrappedTitleEl = document.getElementById("kpi-scrapped-title");
-            if (excluded > 0) {
-                elements.kpiScrappedRecords.textContent = excluded.toLocaleString();
-                if (scrappedTitleEl) scrappedTitleEl.textContent = "ข้อมูลที่ถูกตัดออก (แท็บ 4)";
-            } else {
-                elements.kpiScrappedRecords.textContent = scrapped.toLocaleString();
-                if (scrappedTitleEl) scrappedTitleEl.textContent = "ตัดจำหน่ายใน ERP";
-            }
-
-            // Categories
-            const byCat = data.by_category || {};
-            const updateCat = (catKey, elPct, elFill, elMatch, elMismatch, elTabCnt) => {
-                const c = byCat[catKey] || { match_rate: 0, matched: 0, mismatched: 0, total: 0, excluded: 0 };
-                if (elPct) elPct.textContent = `${c.match_rate}%`;
-                if (elFill) elFill.style.width = `${Math.min(100, c.match_rate)}%`;
-                if (elMatch) elMatch.textContent = (c.matched || 0).toLocaleString();
-                if (elMismatch) {
-                    if ((c.excluded || 0) > 0 && (c.mismatched || 0) === 0) {
-                        elMismatch.textContent = `0 (ตัดออก ${c.excluded.toLocaleString()})`;
-                    } else {
-                        elMismatch.textContent = (c.mismatched || 0).toLocaleString();
-                    }
-                }
-                if (elTabCnt) elTabCnt.textContent = (c.total || 0).toLocaleString();
-            };
-
-            await updateSessionStatus();
-
-            updateCat("hw", elements.hwMatchPercent, elements.hwProgressFill, elements.hwMatchedVal, elements.hwMismatchedVal, elements.tabCntHw);
-            updateCat("sw", elements.swMatchPercent, elements.swProgressFill, elements.swMatchedVal, elements.swMismatchedVal, elements.tabCntSw);
-            updateCat("ups", elements.upsMatchPercent, elements.upsProgressFill, elements.upsMatchedVal, elements.upsMismatchedVal, elements.tabCntUps);
-
-            if (elements.tabCntAll) elements.tabCntAll.textContent = total.toLocaleString();
-
-            // Update files status row count
-            await loadFilesStatus();
-        } catch (err) {
-            console.error("Load summary error:", err);
-            showToast("ไม่สามารถโหลดสรุปข้อมูลได้", "error");
+        // If in category view, update action bar
+        if (["hw", "sw", "ups"].includes(state.currentView)) {
+            updateWorkspaceControls(state.activeCategory);
         }
     }
 
-    async function loadRecords() {
-        elements.tableBody.innerHTML = `
-            <tr>
-                <td colspan="7" class="loading-cell">
-                    <i class="fa-solid fa-spinner fa-spin"></i> กำลังโหลดรายการ...
-                </td>
-            </tr>
-        `;
+    function updateWorkspaceControls(cat) {
+        const st = (state.systemState && state.systemState.category_states && state.systemState.category_states[cat]) || "empty";
+        const badge = elements.workspaceStatusBadge;
+
+        elements.btnExportCategory.href = `/api/export/inventory/${cat}`;
+
+        if (st === "compared") {
+            badge.className = "status-indicator-badge text-green";
+            badge.innerHTML = '<i class="fa-solid fa-circle-check"></i> เปรียบเทียบแล้ว';
+            elements.categoryKpiBar.style.display = "flex";
+            elements.btnExportCategory.style.display = "inline-flex";
+            elements.btnRunAutoFix.style.display = "inline-flex";
+            elements.btnRunCompare.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> เปรียบเทียบใหม่';
+        } else if (st === "stale") {
+            badge.className = "status-indicator-badge text-amber";
+            badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ข้อมูลเปลี่ยน - รอเปรียบเทียบใหม่';
+            elements.categoryKpiBar.style.display = "none";
+            elements.btnExportCategory.style.display = "none";
+            elements.btnRunAutoFix.style.display = "none";
+            elements.btnRunCompare.innerHTML = '<i class="fa-solid fa-play"></i> เริ่มเปรียบเทียบ';
+        } else if (st === "loaded") {
+            badge.className = "status-indicator-badge text-blue";
+            badge.innerHTML = '<i class="fa-solid fa-circle-info"></i> พร้อมให้กดเปรียบเทียบ';
+            elements.categoryKpiBar.style.display = "none";
+            elements.btnExportCategory.style.display = "none";
+            elements.btnRunAutoFix.style.display = "none";
+            elements.btnRunCompare.innerHTML = '<i class="fa-solid fa-play"></i> เริ่มเปรียบเทียบ';
+        } else {
+            badge.className = "status-indicator-badge";
+            badge.innerHTML = 'ยังไม่มีไฟล์';
+            elements.categoryKpiBar.style.display = "none";
+            elements.btnExportCategory.style.display = "none";
+            elements.btnRunAutoFix.style.display = "none";
+            elements.btnRunCompare.innerHTML = '<i class="fa-solid fa-play"></i> เริ่มเปรียบเทียบ';
+        }
+
+        // Update KPI bar if compared
+        if (st === "compared" && state.systemState && state.systemState.summary) {
+            const catSum = (state.systemState.summary.by_category && state.systemState.summary.by_category[cat]) || {};
+            elements.catKpiMatchRate.textContent = `${catSum.match_rate || 0}%`;
+            elements.catKpiMatched.textContent = (catSum.matched || 0).toLocaleString();
+            elements.catKpiMismatched.textContent = (catSum.mismatched || 0).toLocaleString();
+            elements.catKpiExcluded.textContent = (catSum.excluded || 0).toLocaleString();
+            elements.catKpiUserEdited.textContent = (catSum.user_edited || 0).toLocaleString();
+        }
+    }
+
+    // =========================================================================
+    // Workspace Actions: Compare & Auto-Fix
+    // =========================================================================
+    elements.btnRunCompare.addEventListener("click", async () => {
+        const cat = state.activeCategory;
+        elements.btnRunCompare.disabled = true;
+        elements.btnRunCompare.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังเปรียบเทียบ...';
 
         try {
-            const params = new URLSearchParams({
-                category: state.category,
-                mismatch_only: state.mismatchOnly,
-                filter_type: state.filterType,
-                search: state.searchQuery,
-                page: state.page,
-                page_size: state.pageSize
-            });
-
-            const res = await fetch(`/api/records?${params.toString()}`);
-            if (!res.ok) throw new Error("Could not fetch records");
+            const res = await fetch(`/api/compare/${cat}`, { method: "POST" });
             const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || "การเปรียบเทียบล้มเหลว");
 
-            state.totalRecords = Number(data.total ?? data.total_count ?? 0);
-            state.totalPages = Number(data.total_pages ?? Math.max(1, Math.ceil(state.totalRecords / state.pageSize)));
+            showToast(`เปรียบเทียบหมวด ${cat.toUpperCase()} สำเร็จ! (ความตรงกัน: ${data.category_summary.match_rate}%)`, "success");
+            await fetchSystemState();
+            await loadCategoryWorkspace(cat);
+        } catch (e) {
+            showToast(e.message, "error");
+        } finally {
+            elements.btnRunCompare.disabled = false;
+        }
+    });
 
-            renderTable(data.records || []);
-            renderPagination();
-        } catch (err) {
-            console.error("Load records error:", err);
-            elements.tableBody.innerHTML = `
-                <tr>
-                    <td colspan="7" class="loading-cell text-red">
-                        <i class="fa-solid fa-circle-exclamation"></i> เกิดข้อผิดพลาดในการโหลดข้อมูล
-                    </td>
-                </tr>
-            `;
+    elements.btnRunAutoFix.addEventListener("click", async () => {
+        const cat = state.activeCategory;
+        elements.btnRunAutoFix.disabled = true;
+        elements.btnRunAutoFix.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังซิงค์...';
+
+        try {
+            const res = await fetch(`/api/auto-fix/${cat}`, { method: "POST" });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || "Auto-Fix ล้มเหลว");
+
+            const upd = data.result ? data.result.updated_count : 0;
+            const excl = data.result ? data.result.excluded_count : 0;
+            showToast(`Auto-Fix สำเร็จ (ปรับปรุง ${upd} รายการ, คัดแยก ${excl} รายการ)`, "success");
+            await fetchSystemState();
+            await loadCategoryWorkspace(cat);
+        } catch (e) {
+            showToast(e.message, "error");
+        } finally {
+            elements.btnRunAutoFix.disabled = false;
+            elements.btnRunAutoFix.innerHTML = '<i class="fa-solid fa-bolt"></i> 1-Click Auto-Fix';
+        }
+    });
+
+    // =========================================================================
+    // Spreadsheet Grid Engine (Full Columns + In-Cell Edit)
+    // =========================================================================
+    async function loadCategoryWorkspace(cat) {
+        updateWorkspaceControls(cat);
+
+        const params = new URLSearchParams({
+            filter_type: state.gridFilter,
+            search: state.gridSearch,
+            page: state.gridPage,
+            page_size: state.gridPageSize
+        });
+
+        elements.spreadsheetTbody.innerHTML = `<tr><td colspan="10" style="padding: 24px; text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> กำลังโหลดตารางข้อมูล...</td></tr>`;
+
+        try {
+            const res = await fetch(`/api/grid/${cat}?${params.toString()}`);
+            if (!res.ok) throw new Error("Could not load grid");
+            const data = await res.json();
+            renderSpreadsheetGrid(data);
+        } catch (e) {
+            elements.spreadsheetTbody.innerHTML = `<tr><td colspan="10" style="padding: 24px; text-align: center; color: red;">เกิดข้อผิดพลาดในการโหลดตาราง: ${e.message}</td></tr>`;
         }
     }
 
-    // =========================================================================
-    // Table Rendering
-    // =========================================================================
-    function getMismatchBadge(type, rec) {
-        if (rec && rec.is_excluded) {
-            return `<span class="badge-mismatch mismatch-scrapped"><i class="fa-solid fa-filter-circle-xmark"></i> ตัดออก: ${rec.exclude_reason || type}</span>`;
-        }
-        if (!type || type === "ตรงกันสมบูรณ์") {
-            return `<span class="badge-mismatch mismatch-match"><i class="fa-solid fa-circle-check"></i> ตรงกัน 100%</span>`;
-        }
-        if (type.includes("รหัสพนักงาน + แผนก")) {
-            return `<span class="badge-mismatch mismatch-both"><i class="fa-solid fa-triangle-exclamation"></i> ต่างพนักงาน+แผนก</span>`;
-        }
-        if (type.includes("รหัสพนักงาน")) {
-            return `<span class="badge-mismatch mismatch-emp"><i class="fa-solid fa-user-xmark"></i> พนักงานไม่ตรง</span>`;
-        }
-        if (type.includes("แผนก")) {
-            return `<span class="badge-mismatch mismatch-dept"><i class="fa-solid fa-building-circle-xmark"></i> แผนกไม่ตรง</span>`;
-        }
-        if (type.includes("ตัดจำหน่าย")) {
-            return `<span class="badge-mismatch mismatch-scrapped"><i class="fa-solid fa-ban"></i> ตัดจำหน่ายใน ERP</span>`;
-        }
-        if (type.includes("ไม่พบ")) {
-            return `<span class="badge-mismatch mismatch-missing"><i class="fa-solid fa-circle-question"></i> ไม่พบใน ERP</span>`;
-        }
-        return `<span class="badge-mismatch mismatch-both">${type}</span>`;
-    }
+    function renderSpreadsheetGrid(data) {
+        const cols = data.columns || [];
+        const records = data.records || [];
+        const cat = data.category;
 
-    function renderTable(records) {
+        // 1. Build Header
+        let thHtml = `
+            <th class="col-sticky-1" style="width: 45px; text-align: center;">#</th>
+            <th class="col-sticky-2" style="width: 140px;">สถานะ</th>
+        `;
+        cols.forEach(col => {
+            thHtml += `<th>${col}</th>`;
+        });
+        elements.spreadsheetThead.innerHTML = `<tr>${thHtml}</tr>`;
+
+        // 2. Build Rows
         if (records.length === 0) {
-            const ov = (state.summary && state.summary.overall) || {};
-            if (state.mismatchOnly && state.filterType === "all" && ov.verified_100_percent) {
-                elements.tableBody.innerHTML = `
-                    <tr>
-                        <td colspan="7" class="loading-cell" style="padding: 36px 20px;">
-                            <div style="color: var(--green-success); font-size: 16px; font-weight: 700; margin-bottom: 8px;">
-                                <i class="fa-solid fa-circle-check"></i> ตรวจสอบซ้ำ ${ov.verification_passes || 3} รอบสำเร็จ: ข้อมูลใช้งานจริงตรงกับ ERP 100.0% ไม่พบจุดต่างคงเหลือ!
-                            </div>
-                            <div style="color: var(--text-muted); font-size: 13px; margin-bottom: 14px;">
-                                ข้อมูลที่แก้ไขแล้ว 100% (แท็บ 3) จำนวน <strong>${(ov.matched_records || 0).toLocaleString()}</strong> รายการ และข้อมูลที่ถูกตัดออก (แท็บ 4) จำนวน <strong>${(ov.excluded_records || 0).toLocaleString()}</strong> รายการ พร้อมดาวน์โหลดเป็นไฟล์แยก 3 หมวดแล้ว
-                            </div>
-                            <div style="display: flex; gap: 10px; justify-content: center; flex-wrap: wrap;">
-                                <button type="button" class="btn btn-primary btn-sm" id="btn-quick-show-matched">
-                                    <i class="fa-solid fa-list-check"></i> ดูข้อมูลแก้ไขแล้ว 100% (แท็บ 3)
-                                </button>
-                                <button type="button" class="btn btn-secondary btn-sm" id="btn-quick-show-excluded">
-                                    <i class="fa-solid fa-filter-circle-xmark"></i> ดูข้อมูลที่ถูกตัดออก (แท็บ 4)
-                                </button>
-                                <a href="/api/export/inventory-all" target="_blank" class="btn btn-action-green btn-sm" style="text-decoration: none;">
-                                    <i class="fa-solid fa-file-zipper"></i> ดาวน์โหลดครบทั้ง 3 ไฟล์ (4 แท็บ)
-                                </a>
-                            </div>
-                        </td>
-                    </tr>
-                `;
-                const btnShowMatched = document.getElementById("btn-quick-show-matched");
-                if (btnShowMatched) {
-                    btnShowMatched.addEventListener("click", () => {
-                        state.mismatchOnly = false;
-                        if (elements.chkMismatchOnly) elements.chkMismatchOnly.checked = false;
-                        state.filterType = "all";
-                        elements.filterPills.forEach(p => p.classList.toggle("active", p.getAttribute("data-filter") === "all"));
-                        state.page = 1;
-                        loadRecords();
-                    });
-                }
-                const btnShowExcluded = document.getElementById("btn-quick-show-excluded");
-                if (btnShowExcluded) {
-                    btnShowExcluded.addEventListener("click", () => {
-                        state.filterType = "excluded";
-                        elements.filterPills.forEach(p => p.classList.toggle("active", p.getAttribute("data-filter") === "excluded"));
-                        state.page = 1;
-                        loadRecords();
-                    });
-                }
-                return;
-            }
-
-            elements.tableBody.innerHTML = `
-                <tr>
-                    <td colspan="7" class="loading-cell">
-                        <i class="fa-solid fa-magnifying-glass"></i> ไม่พบรายการที่ตรงกับเงื่อนไข
-                    </td>
-                </tr>
-            `;
+            elements.spreadsheetTbody.innerHTML = `<tr><td colspan="${cols.length + 2}" style="padding: 28px; text-align: center; color: var(--text-muted);">ไม่พบรายการที่ตรงกับเงื่อนไข</td></tr>`;
+            updatePaginationInfo(0, 0, 0, 1, 1);
             return;
         }
 
-        const startIdx = (state.page - 1) * state.pageSize;
-        let html = "";
+        const startIdx = (data.page - 1) * data.page_size;
+        let tbodyHtml = "";
 
         records.forEach((r, idx) => {
             const rowNum = startIdx + idx + 1;
-            const cat = r.category || "hw";
-            const ax = r.ax_data || {};
+            const uid = r.uid;
             const diffs = r.diff_fields || [];
+            const userEdited = r.user_edited_cols || [];
+            const isExcluded = r.is_excluded;
+            const isMatch = r.is_match;
 
-            // Highlight differences
-            const empDiff = diffs.includes("emp_id") || diffs.includes("both");
-            const deptDiff = diffs.includes("dept") || diffs.includes("both");
+            let rowClass = "";
+            if (isExcluded) rowClass += " row-excluded";
+            if (state.selectedRecord && state.selectedRecord.uid === uid) rowClass += " selected";
 
-            const itEmpHtml = empDiff
-                ? `<mark class="diff-highlight">${r.it_emp_name || r.it_emp_id || "-"}</mark>`
-                : (r.it_emp_name || r.it_emp_id || "-");
+            // Status Badge
+            let statusBadge = "";
+            if (isExcluded) {
+                statusBadge = `<span class="tag-cat tag-ups" style="font-size: 11px;"><i class="fa-solid fa-filter-circle-xmark"></i> ตัดออก</span>`;
+            } else if (isMatch === true) {
+                statusBadge = `<span class="tag-cat tag-hw" style="color: #059669; background: #ecfdf5; font-size: 11px;"><i class="fa-solid fa-circle-check"></i> ตรงกัน 100%</span>`;
+            } else if (isMatch === false) {
+                statusBadge = `<span class="tag-cat" style="color: #dc2626; background: #fef2f2; font-size: 11px;"><i class="fa-solid fa-triangle-exclamation"></i> ไม่ตรง</span>`;
+            } else {
+                statusBadge = `<span class="file-badge badge-empty" style="font-size: 11px;">รอเปรียบเทียบ</span>`;
+            }
 
-            const itDeptHtml = deptDiff
-                ? `<mark class="diff-highlight">${r.it_dept || "-"}</mark>`
-                : (r.it_dept || "-");
-
-            const axEmpHtml = empDiff
-                ? `<mark class="diff-highlight">${ax.ax_emp_name || ax.ax_emp_id || "-"}</mark>`
-                : (ax.ax_emp_name || ax.ax_emp_id || "-");
-
-            const axDeptHtml = deptDiff
-                ? `<mark class="diff-highlight">${ax.ax_dept || "-"}</mark>`
-                : (ax.ax_dept || "-");
-
-            const canQuickFix = Boolean(!r.is_match && !r.is_excluded && !ax.is_scrapped && ax.asset_id);
-
-            html += `
-                <tr data-uid="${r.uid}">
-                    <td style="color: var(--text-muted); font-size: 11px;">${rowNum}</td>
-                    <td><span class="badge-cat badge-cat-${cat}">${cat.toUpperCase()}</span></td>
-                    <td style="font-weight: 600; font-family: monospace; color: var(--blue-primary);">${r.asset_id || "-"}</td>
-                    <td>${getMismatchBadge(r.mismatch_type, r)}</td>
-                    <td>
-                        <div class="info-cell-block">
-                            <div class="info-line"><span class="info-label">ผู้ใช้:</span><span class="info-val">${itEmpHtml}</span></div>
-                            <div class="info-line"><span class="info-label">แผนก:</span><span class="info-val">${itDeptHtml}</span></div>
-                            <div class="info-line"><span class="info-label">S/N:</span><span class="info-val" style="color: var(--text-muted); font-size: 11px;">${r.it_sn || "-"}</span></div>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="info-cell-block">
-                            <div class="info-line"><span class="info-label">ERP:</span><span class="info-val">${axEmpHtml}</span></div>
-                            <div class="info-line"><span class="info-label">แผนก:</span><span class="info-val">${axDeptHtml}</span></div>
-                            <div class="info-line"><span class="info-label">สถานะ:</span><span class="info-val" style="color: var(--text-muted); font-size: 11px;">${ax.ax_status || (ax.asset_id ? "ปกติ" : "ไม่พบใน ERP")}</span></div>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="cell-actions">
-                            ${canQuickFix ? `
-                                <button class="btn-table-action btn-quick-fix" data-uid="${r.uid}" title="อัปเดตข้อมูลพนักงานและแผนกให้ตรงกับ ERP ทันที">
-                                    <i class="fa-solid fa-bolt"></i> ตรง ERP
-                                </button>
-                            ` : ""}
-                            <button class="btn-table-action btn-edit-manual" data-uid="${r.uid}" title="เปิดหน้าต่างแก้ไขข้อมูล">
-                                <i class="fa-solid fa-pen"></i> แก้ไข
-                            </button>
-                        </div>
-                    </td>
-                </tr>
+            let trHtml = `
+                <tr class="${rowClass}" data-uid="${uid}">
+                    <td class="col-sticky-1" style="text-align: center; color: var(--text-muted);">${rowNum}</td>
+                    <td class="col-sticky-2">${statusBadge}</td>
             `;
+
+            cols.forEach(col => {
+                const val = r.cells[col] || "";
+                let cellClass = "";
+
+                if (col.includes("รหัสพนักงาน") && diffs.includes("emp_id")) {
+                    cellClass += " cell-diff-emp";
+                }
+                if ((col.includes("สถานที่เก็บ") || col.includes("แผนก")) && diffs.includes("dept")) {
+                    cellClass += " cell-diff-dept";
+                }
+                if (userEdited.includes(col)) {
+                    cellClass += " cell-user-edited";
+                }
+
+                trHtml += `<td class="${cellClass}" data-col="${col}" title="ดับเบิลคลิกเพื่อแก้ไข">${val}</td>`;
+            });
+
+            trHtml += `</tr>`;
+            tbodyHtml += trHtml;
         });
 
-        elements.tableBody.innerHTML = html;
-        bindTableEvents(records);
+        elements.spreadsheetTbody.innerHTML = tbodyHtml;
+        bindSpreadsheetEvents(records);
+        updatePaginationInfo(startIdx + 1, Math.min(data.total, startIdx + records.length), data.total, data.page, data.total_pages);
     }
 
-    function renderPagination() {
-        const total = state.totalRecords;
-        const start = total === 0 ? 0 : (state.page - 1) * state.pageSize + 1;
-        const end = Math.min(total, state.page * state.pageSize);
-
-        if (elements.pageStart) elements.pageStart.textContent = start.toLocaleString();
-        if (elements.pageEnd) elements.pageEnd.textContent = end.toLocaleString();
-        if (elements.totalCount) elements.totalCount.textContent = total.toLocaleString();
-        if (elements.pageCurrent) elements.pageCurrent.textContent = `หน้า ${state.page} / ${state.totalPages}`;
-
-        if (elements.btnPrevPage) elements.btnPrevPage.disabled = state.page <= 1;
-        if (elements.btnNextPage) elements.btnNextPage.disabled = state.page >= state.totalPages;
+    function updatePaginationInfo(start, end, total, page, totalPages) {
+        elements.gridPaginationInfo.textContent = `แสดง ${start.toLocaleString()} - ${end.toLocaleString()} จากทั้งหมด ${total.toLocaleString()} รายการ`;
+        elements.gridPageCurrent.textContent = `หน้า ${page} / ${totalPages}`;
+        elements.btnGridPrev.disabled = page <= 1;
+        elements.btnGridNext.disabled = page >= totalPages;
     }
 
     // =========================================================================
-    // Table Action Handlers
+    // Grid Events: Cell Double-Click Editing & Side Panel Selection
     // =========================================================================
-    function bindTableEvents(records) {
-        // 1-Click Quick-Fix
-        document.querySelectorAll(".btn-quick-fix").forEach(btn => {
-            btn.addEventListener("click", async (e) => {
+    function bindSpreadsheetEvents(records) {
+        // Row Click: Select & Show ERP Side Panel
+        document.querySelectorAll("#spreadsheet-tbody tr").forEach(tr => {
+            tr.addEventListener("click", () => {
+                const uid = tr.getAttribute("data-uid");
+                const rec = records.find(r => r.uid === uid);
+                if (!rec) return;
+
+                document.querySelectorAll("#spreadsheet-tbody tr").forEach(r => r.classList.remove("selected"));
+                tr.classList.add("selected");
+                state.selectedRecord = rec;
+                renderSidePanel(rec);
+            });
+        });
+
+        // Double Click Cell: Edit
+        document.querySelectorAll("#spreadsheet-tbody td[data-col]").forEach(td => {
+            td.addEventListener("dblclick", (e) => {
                 e.stopPropagation();
-                const uid = btn.getAttribute("data-uid");
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+                if (td.querySelector("input")) return; // already editing
 
+                const col = td.getAttribute("data-col");
+                const tr = td.closest("tr");
+                const uid = tr.getAttribute("data-uid");
+                const currentText = td.textContent;
+
+                const input = document.createElement("input");
+                input.type = "text";
+                input.className = "cell-edit-input";
+                input.value = currentText;
+
+                td.innerHTML = "";
+                td.appendChild(input);
+                input.focus();
+                input.select();
+
+                const saveCell = async () => {
+                    const newVal = input.value.trim();
+                    if (newVal === currentText) {
+                        td.textContent = currentText;
+                        return;
+                    }
+
+                    td.textContent = newVal;
+                    td.classList.add("cell-user-edited");
+
+                    try {
+                        const res = await fetch("/api/cell", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ uid, column: col, value: newVal, user: "IT Officer" })
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.detail || "Update failed");
+
+                        showToast(`แก้ไขเซลล์ ${col} สำเร็จ`, "success");
+                        await fetchSystemState();
+                        // Re-render side panel if this row is selected
+                        if (state.selectedRecord && state.selectedRecord.uid === uid) {
+                            state.selectedRecord = data.record;
+                            renderSidePanel(data.record);
+                        }
+                    } catch (err) {
+                        showToast(`เกิดข้อผิดพลาด: ${err.message}`, "error");
+                        td.textContent = currentText;
+                    }
+                };
+
+                input.addEventListener("blur", saveCell);
+                input.addEventListener("keydown", (ev) => {
+                    if (ev.key === "Enter") {
+                        input.blur();
+                    } else if (ev.key === "Escape") {
+                        input.removeEventListener("blur", saveCell);
+                        td.textContent = currentText;
+                    }
+                });
+            });
+        });
+    }
+
+    // =========================================================================
+    // Side Panel Rendering & Row Actions
+    // =========================================================================
+    function renderSidePanel(rec) {
+        const ax = rec.ax_data || {};
+        const isExcl = rec.is_excluded;
+
+        let html = `
+            <div class="side-item-group">
+                <div class="side-item-label">รหัสสินทรัพย์ (Asset ID):</div>
+                <div class="side-item-val" style="color: var(--blue-primary); font-family: monospace;">${ax.asset_id || "-"}</div>
+            </div>
+            <div class="side-item-group">
+                <div class="side-item-label">สถานะในระบบ ERP (AX):</div>
+                <div class="side-item-val">${ax.ax_status || (ax.asset_id ? "ปกติ" : "ไม่พบใน ERP")}</div>
+            </div>
+            <div class="side-item-group">
+                <div class="side-item-label">ผู้ถือครองใน ERP:</div>
+                <div class="side-item-val">${ax.ax_emp_name ? `${ax.ax_emp_name} (${ax.ax_emp_id || ""})` : (ax.ax_emp_id || "-")}</div>
+            </div>
+            <div class="side-item-group">
+                <div class="side-item-label">แผนกใน ERP:</div>
+                <div class="side-item-val">${ax.ax_dept || "-"}</div>
+            </div>
+            <div class="side-item-group">
+                <div class="side-item-label">Serial Number (ERP):</div>
+                <div class="side-item-val">${ax.ax_sn || "-"}</div>
+            </div>
+
+            <div class="side-actions-row">
+                ${ax.asset_id && !ax.is_scrapped ? `
+                    <button class="btn btn-primary btn-sm" id="btn-side-sync-erp">
+                        <i class="fa-solid fa-bolt"></i> ใช้ข้อมูล ERP กับแถวนี้
+                    </button>
+                ` : ""}
+
+                <button class="btn btn-secondary btn-sm" id="btn-side-toggle-excl">
+                    <i class="fa-solid ${isExcl ? 'fa-arrow-rotate-left text-green' : 'fa-filter-circle-xmark text-amber'}"></i>
+                    ${isExcl ? 'คืนกลับเป็นรายการใช้งาน (แท็บ 3)' : 'ย้ายไปข้อมูลที่ถูกตัดออก (แท็บ 4)'}
+                </button>
+            </div>
+        `;
+
+        elements.sidePanelBody.innerHTML = html;
+
+        // Bind Side Panel Action Buttons
+        const btnToggleExcl = document.getElementById("btn-side-toggle-excl");
+        if (btnToggleExcl) {
+            btnToggleExcl.addEventListener("click", async () => {
                 try {
-                    const res = await fetch("/api/quick-fix", {
+                    const res = await fetch("/api/row/exclusion", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ uid, user: "IT Officer" })
+                        body: JSON.stringify({ uid: rec.uid, exclude: !isExcl, user: "IT Officer" })
                     });
-                    const data = await res.json().catch(() => ({}));
-                    if (!res.ok) {
-                        throw new Error(data.detail || "การเชื่อมต่อกับระบบ Quick-Fix ขัดข้อง");
-                    }
-                    if (data.status === "warning") {
-                        showToast(data.message || "รายการนี้ไม่สามารถซิงค์อัตโนมัติได้", "warning");
-                    } else if (data.status === "info") {
-                        showToast(data.message || "ข้อมูลตรงกันอยู่แล้ว ไม่มีการเปลี่ยนแปลง", "info");
-                    } else {
-                        showToast(data.message || "อัปเดตข้อมูลสำเร็จ", "success");
-                        await loadSummary();
-                        await loadRecords();
-                    }
-                } catch (err) {
-                    console.error("Quick-fix error:", err);
-                    showToast(err.message || "เกิดข้อผิดพลาดในการอัปเดตข้อมูล", "error");
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fa-solid fa-bolt"></i> ตรง ERP';
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail);
+
+                    showToast(isExcl ? "คืนกลับเป็นรายการใช้งานแล้ว" : "ย้ายไปข้อมูลที่ถูกตัดออกแล้ว", "info");
+                    await fetchSystemState();
+                    await loadCategoryWorkspace(rec.category);
+                } catch (e) {
+                    showToast(e.message, "error");
                 }
             });
-        });
-
-        // Edit Modal Trigger
-        document.querySelectorAll(".btn-edit-manual").forEach(btn => {
-            btn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                const uid = btn.getAttribute("data-uid");
-                const rec = records.find(r => r.uid === uid);
-                if (rec) openEditModal(rec);
-            });
-        });
-    }
-
-    // =========================================================================
-    // Modal Edit Operations
-    // =========================================================================
-    function openEditModal(rec) {
-        state.currentRecord = rec;
-        const ax = rec.ax_data || {};
-
-        elements.editUid.value = rec.uid;
-        elements.editAssetIdDisplay.textContent = rec.asset_id || "-";
-        elements.editTypeDisplay.textContent = (rec.category || "HW").toUpperCase();
-        elements.editMismatchText.textContent = rec.mismatch_type || "-";
-
-        elements.refAxName.textContent = ax.ax_asset_name || "-";
-        elements.refAxEmp.textContent = ax.ax_emp_name ? `${ax.ax_emp_name} (${ax.ax_emp_id || ""})` : (ax.ax_emp_id || "-");
-        elements.refAxDept.textContent = ax.ax_dept || "-";
-        elements.refAxStatus.textContent = ax.ax_status || (ax.asset_id ? "ปกติ" : "ไม่พบใน ERP");
-
-        elements.editItEmpId.value = rec.it_emp_id || "";
-        elements.editItEmpName.value = rec.it_emp_name || "";
-        elements.editItDept.value = rec.it_dept || "";
-        elements.editItSn.value = rec.it_sn || "";
-        elements.editItAssetId.value = rec.asset_id || "";
-
-        elements.modalEdit.style.display = "flex";
-    }
-
-    function closeEditModal() {
-        elements.modalEdit.style.display = "none";
-        state.currentRecord = null;
-    }
-
-    elements.btnCopyAx.addEventListener("click", () => {
-        if (!state.currentRecord || !state.currentRecord.ax_data) return;
-        const ax = state.currentRecord.ax_data;
-        if (ax.ax_emp_id) elements.editItEmpId.value = ax.ax_emp_id;
-        if (ax.ax_emp_name) elements.editItEmpName.value = ax.ax_emp_name;
-        if (ax.ax_dept) elements.editItDept.value = ax.ax_dept;
-        showToast("คัดลอกข้อมูล ERP ลงฟอร์มเรียบร้อยแล้ว", "info");
-    });
-
-    elements.btnSaveEdit.addEventListener("click", async () => {
-        const uid = elements.editUid.value;
-        if (!uid) return;
-
-        elements.btnSaveEdit.disabled = true;
-        elements.btnSaveEdit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังบันทึก...';
-
-        try {
-            const payload = {
-                uid: uid,
-                it_emp_id: elements.editItEmpId.value,
-                it_emp_name: elements.editItEmpName.value,
-                it_dept: elements.editItDept.value,
-                it_sn: elements.editItSn.value,
-                asset_id: elements.editItAssetId.value,
-                user: "IT Officer"
-            };
-
-            const res = await fetch("/api/correct", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
-
-            if (!res.ok) throw new Error("Correction request failed");
-            showToast(`บันทึกข้อมูล ${elements.editAssetIdDisplay.textContent} สำเร็จ`, "success");
-            closeEditModal();
-            await loadSummary();
-            await loadRecords();
-        } catch (err) {
-            console.error("Save edit error:", err);
-            showToast("เกิดข้อผิดพลาดในการบันทึกข้อมูล", "error");
-        } finally {
-            elements.btnSaveEdit.disabled = false;
-            elements.btnSaveEdit.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> บันทึกข้อมูลและคำนวณใหม่';
-        }
-    });
-
-    // =========================================================================
-    // Batch Auto-Fix Handlers
-    // =========================================================================
-    async function triggerBatchAutoFix() {
-        const btn = elements.btnCardBatchTrigger || elements.btnBatchQuickFix;
-        const originalHtml = btn ? btn.innerHTML : "";
-        if (btn) {
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังประมวลผล Auto-Fix...';
         }
 
-        try {
-            const res = await fetch("/api/batch-quick-fix", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ category: state.category, user: "IT Officer" })
+        const btnSyncErp = document.getElementById("btn-side-sync-erp");
+        if (btnSyncErp) {
+            btnSyncErp.addEventListener("click", async () => {
+                try {
+                    const cmap = { hw: ["รหัสพนักงาน", "ผู้ใช้งาน/ดูแล", "สถานที่เก็บ"], sw: ["รหัสพนักงาน", "ผู้ดูแล", "สถานที่เก็บ"], ups: ["รหัสพนักงาน", "ผู้ใช้งาน/ดูแล", "สถานที่เก็บ"] };
+                    const cols = cmap[rec.category];
+                    if (ax.ax_emp_id) await fetch("/api/cell", { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ uid: rec.uid, column: cols[0], value: ax.ax_emp_id }) });
+                    if (ax.ax_emp_name) await fetch("/api/cell", { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ uid: rec.uid, column: cols[1], value: ax.ax_emp_name }) });
+                    if (ax.ax_dept) await fetch("/api/cell", { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ uid: rec.uid, column: cols[2], value: ax.ax_dept }) });
+
+                    showToast("ซิงค์ข้อมูลแถวนี้ให้ตรงกับ ERP แล้ว", "success");
+                    await fetchSystemState();
+                    await loadCategoryWorkspace(rec.category);
+                } catch (e) {
+                    showToast(e.message, "error");
+                }
             });
-
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                throw new Error(data.detail || "การเชื่อมต่อกับระบบ Auto-Fix ขัดข้อง");
-            }
-
-            const count = data.result ? data.result.updated_count : 0;
-            const newRate = data.result ? data.result.new_match_rate : 0;
-
-            if (data.message) {
-                showToast(data.message, "success");
-            } else if (count > 0) {
-                showToast(`อัปเดตข้อมูลตรง ERP สำเร็จ ${count.toLocaleString()} รายการ (ความตรงกัน: ${newRate}%)`, "success");
-            } else {
-                showToast("ซิงค์ข้อมูลตรงกับ ERP สมบูรณ์ 100.0% เรียบร้อยแล้ว", "success");
-            }
-            await loadSummary();
-            await loadRecords();
-        } catch (err) {
-            console.error("Batch fix error:", err);
-            showToast(err.message || "เกิดข้อผิดพลาดในการประมวลผล Auto-Fix", "error");
-        } finally {
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = originalHtml;
-            }
         }
     }
 
-    if (elements.btnBatchQuickFix) {
-        elements.btnBatchQuickFix.addEventListener("click", triggerBatchAutoFix);
-    }
-    if (elements.btnCardBatchTrigger) {
-        elements.btnCardBatchTrigger.addEventListener("click", triggerBatchAutoFix);
-    }
-
-    // Re-compare Action (if present)
-    if (elements.btnRecompare) {
-        elements.btnRecompare.addEventListener("click", async () => {
-            const icon = elements.btnRecompare.querySelector("i");
-            if (icon) icon.classList.add("fa-spin");
-            elements.btnRecompare.disabled = true;
-
-            try {
-                const res = await fetch("/api/recompare", { method: "POST" });
-                if (!res.ok) throw new Error("Recompare failed");
-                await loadSummary();
-                await loadRecords();
-                showToast("ประมวลผลเปรียบเทียบใหม่เรียบร้อยแล้ว!", "success");
-            } catch (err) {
-                console.error("Recompare error:", err);
-                showToast("เกิดข้อผิดพลาดในการคำนวณใหม่", "error");
-            } finally {
-                if (icon) icon.classList.remove("fa-spin");
-                elements.btnRecompare.disabled = false;
-            }
-        });
-    }
-
-    // Export Dropdown
-    elements.btnExportDropdown.addEventListener("click", (e) => {
-        e.stopPropagation();
-        elements.dropdownWrapper.classList.toggle("open");
+    elements.btnCloseSidepanel.addEventListener("click", () => {
+        elements.sidePanelBody.innerHTML = '<p class="side-panel-empty">คลิกเลือกแถวในตารางเพื่อดูข้อมูลเปรียบเทียบกับ ERP</p>';
     });
 
-    document.addEventListener("click", () => {
-        elements.dropdownWrapper.classList.remove("open");
-    });
-
-    // Category Tabs
-    elements.catTabs.forEach(tab => {
-        tab.addEventListener("click", () => {
-            elements.catTabs.forEach(t => t.classList.remove("active"));
-            tab.classList.add("active");
-            state.category = tab.getAttribute("data-category");
-            state.page = 1;
-            loadRecords();
-        });
-    });
-
-    // Secondary Filter Pills
-    elements.filterPills.forEach(pill => {
+    // =========================================================================
+    // Grid Filter Pills & Search
+    // =========================================================================
+    elements.gridFilterPills.forEach(pill => {
         pill.addEventListener("click", () => {
-            elements.filterPills.forEach(p => p.classList.remove("active"));
+            elements.gridFilterPills.forEach(p => p.classList.remove("active"));
             pill.classList.add("active");
-            state.filterType = pill.getAttribute("data-filter");
-            state.page = 1;
-            loadRecords();
+            state.gridFilter = pill.getAttribute("data-filter");
+            state.gridPage = 1;
+            loadCategoryWorkspace(state.activeCategory);
         });
     });
 
-    // Search Box with Debounce
     let searchTimer = null;
-    elements.searchInput.addEventListener("input", (e) => {
-        const val = e.target.value.trim();
-        elements.btnClearSearch.style.display = val ? "block" : "none";
-
+    elements.gridSearchInput.addEventListener("input", (e) => {
         clearTimeout(searchTimer);
         searchTimer = setTimeout(() => {
-            state.searchQuery = val;
-            state.page = 1;
-            loadRecords();
-        }, 250);
+            state.gridSearch = e.target.value.trim();
+            state.gridPage = 1;
+            loadCategoryWorkspace(state.activeCategory);
+        }, 300);
     });
 
-    elements.btnClearSearch.addEventListener("click", () => {
-        elements.searchInput.value = "";
-        elements.btnClearSearch.style.display = "none";
-        state.searchQuery = "";
-        state.page = 1;
-        loadRecords();
+    elements.gridPageSize.addEventListener("change", (e) => {
+        state.gridPageSize = parseInt(e.target.value, 10);
+        state.gridPage = 1;
+        loadCategoryWorkspace(state.activeCategory);
     });
 
-    // Mismatch only toggle
-    elements.chkMismatchOnly.addEventListener("change", (e) => {
-        state.mismatchOnly = e.target.checked;
-        state.page = 1;
-        loadRecords();
+    elements.btnGridPrev.addEventListener("click", () => {
+        if (state.gridPage > 1) {
+            state.gridPage--;
+            loadCategoryWorkspace(state.activeCategory);
+        }
     });
 
-    // Pagination Controls
-    if (elements.btnPrevPage) {
-        elements.btnPrevPage.addEventListener("click", () => {
-            if (state.page > 1) {
-                state.page--;
-                loadRecords();
-            }
-        });
-    }
-    if (elements.btnNextPage) {
-        elements.btnNextPage.addEventListener("click", () => {
-            if (state.page < state.totalPages) {
-                state.page++;
-                loadRecords();
-            }
-        });
-    }
-    if (elements.selectPageSize) {
-        elements.selectPageSize.addEventListener("change", (e) => {
-            state.pageSize = parseInt(e.target.value, 10) || 25;
-            state.page = 1;
-            loadRecords();
-        });
-    }
-
-    // Modal Close
-    elements.btnCloseEdit.addEventListener("click", closeEditModal);
-    elements.btnCancelEdit.addEventListener("click", closeEditModal);
+    elements.btnGridNext.addEventListener("click", () => {
+        state.gridPage++;
+        loadCategoryWorkspace(state.activeCategory);
+    });
 
     // =========================================================================
-    // Drag-and-Drop & File Upload Handlers
+    // Summary & Download View
     // =========================================================================
-    async function uploadSelectedFile(fileType, file) {
-        if (!file) return;
-        if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
-            showToast("รองรับเฉพาะไฟล์ Excel (.xlsx หรือ .xls) เท่านั้น", "error");
-            return;
-        }
+    function renderSummaryView() {
+        if (!state.systemState || !state.systemState.summary) return;
+        const byCat = state.systemState.summary.by_category || {};
+        const states = state.systemState.category_states || {};
 
-        const formData = new FormData();
-        formData.append("file_type", fileType);
-        formData.append("file", file);
+        const updateSum = (cat, rateEl, stateEl, matchedEl, mismEl, exclEl) => {
+            const c = byCat[cat] || {};
+            const st = states[cat] || "empty";
+            rateEl.textContent = `${c.match_rate || 0}%`;
+            stateEl.textContent = st === "compared" ? "เปรียบเทียบแล้ว" : (st === "stale" ? "รอเปรียบเทียบใหม่" : "พร้อมเปรียบเทียบ");
+            matchedEl.textContent = (c.matched || 0).toLocaleString();
+            mismEl.textContent = (c.mismatched || 0).toLocaleString();
+            exclEl.textContent = (c.excluded || 0).toLocaleString();
+        };
 
-        showToast(`กำลังอัปโหลดไฟล์ ${file.name}...`, "info");
-
-        try {
-            const res = await fetch("/api/upload", {
-                method: "POST",
-                body: formData
-            });
-            if (!res.ok) throw new Error("Upload failed");
-            const data = await res.json();
-            showToast(data.message || `อัปโหลดไฟล์ ${file.name} เรียบร้อย!`, "success");
-            await loadSummary();
-            await loadRecords();
-        } catch (err) {
-            console.error("Upload error:", err);
-            showToast("เกิดข้อผิดพลาดในการอัปโหลดไฟล์", "error");
-        }
+        updateSum("hw", elements.sumRateHw, elements.sumStateHw, elements.sumMatchedHw, elements.sumMismatchedHw, elements.sumExcludedHw);
+        updateSum("sw", elements.sumRateSw, elements.sumStateSw, elements.sumMatchedSw, elements.sumMismatchedSw, elements.sumExcludedSw);
+        updateSum("ups", elements.sumRateUps, elements.sumStateUps, elements.sumMatchedUps, elements.sumMismatchedUps, elements.sumExcludedUps);
     }
 
+    // =========================================================================
+    // Drag-and-Drop & File Upload
+    // =========================================================================
     function setupDropzone(dropzoneEl, inputEl, fileType) {
         if (!dropzoneEl || !inputEl) return;
 
-        // Click to open file dialog
         dropzoneEl.addEventListener("click", (e) => {
-            if (e.target !== inputEl) {
-                inputEl.click();
-            }
+            if (e.target !== inputEl) inputEl.click();
         });
 
         inputEl.addEventListener("change", () => {
-            if (inputEl.files.length > 0) {
-                uploadSelectedFile(fileType, inputEl.files[0]);
-            }
+            if (inputEl.files.length > 0) uploadSelectedFile(fileType, inputEl.files[0]);
         });
 
-        // Drag & Drop events
-        ["dragenter", "dragover"].forEach(eventName => {
-            dropzoneEl.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+        ["dragenter", "dragover"].forEach(evt => {
+            dropzoneEl.addEventListener(evt, (e) => {
+                e.preventDefault(); e.stopPropagation();
                 dropzoneEl.classList.add("drag-over");
             });
         });
 
-        ["dragleave", "drop"].forEach(eventName => {
-            dropzoneEl.addEventListener(eventName, (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+        ["dragleave", "drop"].forEach(evt => {
+            dropzoneEl.addEventListener(evt, (e) => {
+                e.preventDefault(); e.stopPropagation();
                 dropzoneEl.classList.remove("drag-over");
             });
         });
@@ -898,369 +755,184 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    async function uploadSelectedFile(fileType, file) {
+        if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+            showToast("รองรับเฉพาะไฟล์ Excel (.xlsx หรือ .xls) เท่านั้น", "error");
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append("file_type", fileType);
+        formData.append("file", file);
+
+        showToast(`กำลังอัปโหลดไฟล์ ${file.name}...`, "info");
+        try {
+            const res = await fetch("/api/upload", { method: "POST", body: formData });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail);
+
+            showToast(data.message, "success");
+            await fetchSystemState();
+        } catch (e) {
+            showToast(`อัปโหลดล้มเหลว: ${e.message}`, "error");
+        }
+    }
+
     setupDropzone(elements.dropzoneMaster, elements.fileInputMaster, "master");
     setupDropzone(elements.dropzoneHw, elements.fileInputHw, "hw");
     setupDropzone(elements.dropzoneSw, elements.fileInputSw, "sw");
     setupDropzone(elements.dropzoneUps, elements.fileInputUps, "ups");
 
-    // Initial Load
-    loadSummary();
-    loadRecords();
-
-    // Continuous Heartbeat with Web Worker backup to prevent background timer throttling
-    function pingHeartbeat() {
-        fetch("/api/heartbeat").catch(() => {});
-    }
-
-    try {
-        const hbBlob = new Blob([
-            "setInterval(() => { postMessage('hb'); }, 3000);"
-        ], { type: "application/javascript" });
-        const hbWorker = new Worker(URL.createObjectURL(hbBlob));
-        hbWorker.onmessage = () => {
-            pingHeartbeat();
-        };
-    } catch (e) {
-        setInterval(pingHeartbeat, 3000);
-    }
-
-    // Client Unloading Beacon (signals clean exit when window is closed)
-    window.addEventListener("beforeunload", () => {
-        if (navigator.sendBeacon) {
-            navigator.sendBeacon("/api/client_unloading");
-        } else {
-            fetch("/api/client_unloading", { method: "POST", keepalive: true }).catch(() => {});
-        }
-    });
-
     // =========================================================================
-    // System Log Modal Operations (Centered Pro Max Terminal)
+    // Undo / Redo & Version History
     // =========================================================================
-    let currentLogLines = [];
-
-    function renderLogContent(filterText = "") {
-        if (!elements.logContentArea) return;
-        const q = filterText.toLowerCase().trim();
-        const filtered = q
-            ? currentLogLines.filter(line => line.toLowerCase().includes(q))
-            : currentLogLines;
-
-        if (filtered.length > 0) {
-            elements.logContentArea.textContent = filtered.join("\n");
-        } else if (currentLogLines.length > 0) {
-            elements.logContentArea.textContent = `[ไม่พบ Log ที่ตรงกับคำค้นหา: "${filterText}"]`;
-        } else {
-            elements.logContentArea.textContent = "[ยังไม่มีบันทึกข้อมูลใน Log]";
-        }
-        elements.logContentArea.scrollTop = elements.logContentArea.scrollHeight;
-    }
-
-    async function fetchSystemLogs() {
-        if (!elements.logContentArea) return;
-        elements.logContentArea.textContent = "กำลังดึงข้อมูล Log ล่าสุด...";
-        try {
-            const res = await fetch("/api/logs?lines=300");
-            if (!res.ok) throw new Error("Failed to fetch logs");
-            const data = await res.json();
-            if (elements.logFilePath && data.log_file) {
-                elements.logFilePath.textContent = data.log_file;
-            }
-            currentLogLines = data.lines || [];
-            const searchInput = document.getElementById("log-search-input");
-            const filterVal = searchInput ? searchInput.value : "";
-            renderLogContent(filterVal);
-
-            const statusText = document.getElementById("log-status-text");
-            if (statusText) {
-                statusText.textContent = `อัปเดตแล้ว (${currentLogLines.length} บรรทัด)`;
-            }
-        } catch (e) {
-            elements.logContentArea.textContent = `เกิดข้อผิดพลาดในการโหลด Log: ${e.message}`;
-        }
-    }
-
-    // Live search inside logs
-    const logSearchInput = document.getElementById("log-search-input");
-    if (logSearchInput) {
-        logSearchInput.addEventListener("input", (e) => {
-            renderLogContent(e.target.value);
-        });
-    }
-
-    // Maximize / Restore Log Modal
-    const btnMaximizeLogs = document.getElementById("btn-maximize-logs");
-    const btnMaximizeLogsDot = document.getElementById("btn-maximize-logs-dot");
-    const iconMaximize = document.getElementById("icon-maximize");
-    const modalTerminalBox = document.querySelector(".modal-terminal-box");
-
-    function toggleMaximizeLogs() {
-        if (!modalTerminalBox) return;
-        modalTerminalBox.classList.toggle("is-maximized");
-        const isMax = modalTerminalBox.classList.contains("is-maximized");
-        if (iconMaximize) {
-            iconMaximize.className = isMax ? "fa-solid fa-compress" : "fa-solid fa-expand";
-        }
-    }
-
-    if (btnMaximizeLogs) btnMaximizeLogs.addEventListener("click", toggleMaximizeLogs);
-    if (btnMaximizeLogsDot) btnMaximizeLogsDot.addEventListener("click", toggleMaximizeLogs);
-
-    if (elements.btnViewLogs) {
-        elements.btnViewLogs.addEventListener("click", () => {
-            if (elements.modalLogs) {
-                elements.modalLogs.style.display = "flex";
-                fetchSystemLogs();
-            }
-        });
-    }
-
-    const closeLogModal = () => {
-        if (elements.modalLogs) elements.modalLogs.style.display = "none";
-    };
-
-    if (elements.btnCloseLogs) elements.btnCloseLogs.addEventListener("click", closeLogModal);
-    if (elements.btnDoneLogs) elements.btnDoneLogs.addEventListener("click", closeLogModal);
-    const btnCloseLogsDot = document.getElementById("btn-close-logs-dot");
-    if (btnCloseLogsDot) btnCloseLogsDot.addEventListener("click", closeLogModal);
-
-    if (elements.modalLogs) {
-        elements.modalLogs.addEventListener("click", (e) => {
-            if (e.target === elements.modalLogs) closeLogModal();
-        });
-    }
-
-    if (elements.btnRefreshLogs) {
-        elements.btnRefreshLogs.addEventListener("click", fetchSystemLogs);
-    }
-
-    if (elements.btnCopyLogs) {
-        elements.btnCopyLogs.addEventListener("click", async () => {
-            const text = elements.logContentArea ? elements.logContentArea.textContent : "";
-            try {
-                await navigator.clipboard.writeText(text);
-                showToast("คัดลอกข้อความ Log เรียบร้อยแล้ว", "success");
-            } catch (err) {
-                showToast("ไม่สามารถคัดลอกอัตโนมัติได้ กรุณาเลือกข้อความและกด Ctrl+C", "warning");
-            }
-        });
-    }
-
-    // Global Escape Key to close open modals
-    document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") {
-            closeLogModal();
-            closeEditModal();
-            if (elements.modalHistory) elements.modalHistory.style.display = "none";
-        }
-    });
-
-    // =========================================================================
-    // Google Workspace-Style Undo, Redo, Version History & Session Management
-    // =========================================================================
-    async function updateSessionStatus() {
-        try {
-            const res = await fetch("/api/session/status");
-            if (!res.ok) return;
-            const data = await res.json();
-
-            if (elements.btnUndo) elements.btnUndo.disabled = !data.can_undo;
-            if (elements.btnRedo) elements.btnRedo.disabled = !data.can_redo;
-
-            if (elements.autosaveStatus && elements.autosaveText) {
-                if (data.has_data) {
-                    elements.autosaveStatus.style.display = "inline-flex";
-                    elements.autosaveText.textContent = "บันทึกอัตโนมัติแล้ว";
-                    elements.autosaveStatus.className = "autosave-badge";
-                } else {
-                    elements.autosaveStatus.style.display = "none";
-                }
-            }
-        } catch (e) {
-            console.error("Update session status error:", e);
-        }
-    }
-
     async function triggerUndo() {
-        if (elements.btnUndo && elements.btnUndo.disabled) return;
+        if (elements.btnUndo.disabled) return;
         try {
             const res = await fetch("/api/undo", { method: "POST" });
             const data = await res.json();
             if (data.success) {
-                showToast(data.message || "เลิกทำสำเร็จ", "info");
-                await loadSummary();
-                await loadRecords();
-                await loadFilesStatus();
-            } else {
-                showToast(data.message || "ไม่มีรายการที่จะเลิกทำ", "warning");
+                showToast(data.message, "info");
+                await fetchSystemState();
+                if (["hw", "sw", "ups"].includes(state.currentView)) {
+                    await loadCategoryWorkspace(state.activeCategory);
+                }
             }
-        } catch (err) {
-            console.error("Undo error:", err);
+        } catch (e) {
             showToast("เกิดข้อผิดพลาดในการเลิกทำ", "error");
         }
     }
 
     async function triggerRedo() {
-        if (elements.btnRedo && elements.btnRedo.disabled) return;
+        if (elements.btnRedo.disabled) return;
         try {
             const res = await fetch("/api/redo", { method: "POST" });
             const data = await res.json();
             if (data.success) {
-                showToast(data.message || "ทำซ้ำสำเร็จ", "info");
-                await loadSummary();
-                await loadRecords();
-                await loadFilesStatus();
-            } else {
-                showToast(data.message || "ไม่มีรายการที่จะทำซ้ำ", "warning");
+                showToast(data.message, "info");
+                await fetchSystemState();
+                if (["hw", "sw", "ups"].includes(state.currentView)) {
+                    await loadCategoryWorkspace(state.activeCategory);
+                }
             }
-        } catch (err) {
-            console.error("Redo error:", err);
+        } catch (e) {
             showToast("เกิดข้อผิดพลาดในการทำซ้ำ", "error");
         }
     }
 
-    async function openHistoryModal() {
-        if (!elements.modalHistory) return;
-        elements.modalHistory.style.display = "flex";
-        if (elements.historyTimelineList) {
-            elements.historyTimelineList.innerHTML = '<p style="color: var(--text-muted); font-size: 12px;">กำลังโหลดประวัติ...</p>';
-        }
+    elements.btnUndo.addEventListener("click", triggerUndo);
+    elements.btnRedo.addEventListener("click", triggerRedo);
 
+    // Keyboard Shortcuts (Ctrl+Z / Ctrl+Y)
+    document.addEventListener("keydown", (e) => {
+        if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z") {
+            e.preventDefault(); triggerUndo();
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) {
+            e.preventDefault(); triggerRedo();
+        }
+    });
+
+    // Version History Modal
+    elements.btnHistory.addEventListener("click", async () => {
+        elements.modalHistory.style.display = "flex";
         try {
             const res = await fetch("/api/history");
             const data = await res.json();
-            const history = data.history || [];
-
-            if (history.length === 0) {
-                elements.historyTimelineList.innerHTML = `
-                    <div style="text-align: center; padding: 24px; color: var(--text-muted);">
-                        <i class="fa-solid fa-clock-rotate-left" style="font-size: 28px; margin-bottom: 8px; opacity: 0.5;"></i>
-                        <p>ยังไม่มีประวัติการแก้ไขในเซสชันนี้</p>
-                    </div>
-                `;
+            const list = data.history || [];
+            if (list.length === 0) {
+                elements.historyTimelineList.innerHTML = `<p style="text-align: center; color: var(--text-muted); padding: 20px;">ยังไม่มีประวัติการแก้ไขในเซสชันนี้</p>`;
                 return;
             }
 
             let html = "";
-            history.forEach(item => {
-                const badge = item.type === "batch_quick_fix" 
-                    ? '<span class="badge-cat badge-cat-hw" style="background:#fef3c7; color:#b45309;">BATCH</span>' 
-                    : '<span class="badge-cat badge-cat-sw" style="background:#e0f2fe; color:#0369a1;">EDIT</span>';
-
+            list.forEach(item => {
                 html += `
                     <div class="timeline-card">
                         <div class="timeline-info">
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                ${badge}
-                                <span class="timeline-title">${item.description}</span>
-                            </div>
-                            <div class="timeline-meta">
-                                <span><i class="fa-regular fa-clock"></i> ${item.timestamp}</span>
-                                <span><i class="fa-regular fa-user"></i> ${item.user}</span>
-                            </div>
+                            <div><strong>${item.description}</strong></div>
+                            <div class="timeline-time"><i class="fa-regular fa-clock"></i> ${item.timestamp} · ${item.user}</div>
                         </div>
-                        <button class="btn btn-secondary btn-sm btn-rollback" data-index="${item.index}" title="ย้อนกลับสถานะไปยังจุดนี้">
-                            <i class="fa-solid fa-rotate-left"></i> ย้อนกลับจุดนี้
-                        </button>
+                        <button class="btn btn-secondary btn-sm btn-rollback" data-idx="${item.index}">ย้อนกลับจุดนี้</button>
                     </div>
                 `;
             });
-
             elements.historyTimelineList.innerHTML = html;
 
-            document.querySelectorAll(".btn-rollback").forEach(btn => {
-                btn.addEventListener("click", async () => {
-                    const idx = parseInt(btn.getAttribute("data-index"), 10);
-                    if (confirm(`คุณต้องการย้อนกลับสถานะไปยังเวอร์ชันนี้หรือไม่?`)) {
-                        try {
-                            const rbRes = await fetch("/api/rollback", {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ index: idx })
-                            });
-                            const rbData = await rbRes.json();
-                            showToast(rbData.message || "ย้อนกลับสถานะเรียบร้อย", "success");
-                            closeHistoryModal();
-                            await loadSummary();
-                            await loadRecords();
-                            await loadFilesStatus();
-                        } catch (e) {
-                            showToast("เกิดข้อผิดพลาดในการย้อนกลับ", "error");
+            document.querySelectorAll(".btn-rollback").forEach(b => {
+                b.addEventListener("click", async () => {
+                    const idx = parseInt(b.getAttribute("data-idx"), 10);
+                    if (confirm("ต้องการย้อนกลับสถานะไปยังเวอร์ชันนี้หรือไม่?")) {
+                        await fetch("/api/rollback", { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ index: idx }) });
+                        elements.modalHistory.style.display = "none";
+                        await fetchSystemState();
+                        if (["hw", "sw", "ups"].includes(state.currentView)) {
+                            await loadCategoryWorkspace(state.activeCategory);
                         }
                     }
                 });
             });
         } catch (e) {
-            elements.historyTimelineList.innerHTML = `<p style="color: red; font-size: 12px;">เกิดข้อผิดพลาดในการโหลดประวัติ: ${e.message}</p>`;
-        }
-    }
-
-    const closeHistoryModal = () => {
-        if (elements.modalHistory) elements.modalHistory.style.display = "none";
-    };
-
-    if (elements.btnUndo) elements.btnUndo.addEventListener("click", triggerUndo);
-    if (elements.btnRedo) elements.btnRedo.addEventListener("click", triggerRedo);
-    if (elements.btnHistory) elements.btnHistory.addEventListener("click", openHistoryModal);
-    if (elements.btnCloseHistory) elements.btnCloseHistory.addEventListener("click", closeHistoryModal);
-    if (elements.btnDoneHistory) elements.btnDoneHistory.addEventListener("click", closeHistoryModal);
-    if (elements.modalHistory) {
-        elements.modalHistory.addEventListener("click", (e) => {
-            if (e.target === elements.modalHistory) closeHistoryModal();
-        });
-    }
-
-    // New Session Trigger
-    if (elements.btnNewSession) {
-        elements.btnNewSession.addEventListener("click", async () => {
-            if (confirm("คุณต้องการเริ่มเซสชันใหม่หรือไม่?\nการกระทำนี้จะล้างข้อมูลและประวัติที่บันทึกไว้ และให้คุณใส่ไฟล์ชุดใหม่")) {
-                try {
-                    const res = await fetch("/api/session/reset", { method: "POST" });
-                    const data = await res.json();
-                    showToast(data.message || "เริ่มเซสชันใหม่เรียบร้อย", "success");
-                    await loadSummary();
-                    await loadRecords();
-                    await loadFilesStatus();
-                    await updateSessionStatus();
-                } catch (e) {
-                    showToast("เกิดข้อผิดพลาดในการเริ่มเซสชันใหม่", "error");
-                }
-            }
-        });
-    }
-
-    // Exit Application Trigger
-    if (elements.btnExitApp) {
-        elements.btnExitApp.addEventListener("click", async () => {
-            if (confirm("คุณต้องการปิดและออกจากโปรแกรม FTI IT Asset Compare หรือไม่?")) {
-                try {
-                    await fetch("/api/shutdown?force=true", { method: "POST" });
-                } catch (e) {}
-                showToast("กำลังปิดโปรแกรม...", "info");
-                setTimeout(() => {
-                    window.close();
-                }, 400);
-            }
-        });
-    }
-
-    // Keyboard Shortcuts (Google Workspace style: Ctrl+Z, Ctrl+Y)
-    document.addEventListener("keydown", (e) => {
-        // Ctrl+Z or Cmd+Z -> Undo
-        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "z") {
-            // Check if not typing inside an input/textarea
-            if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
-            e.preventDefault();
-            triggerUndo();
-        }
-        // Ctrl+Y or Ctrl+Shift+Z -> Redo
-        if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === "y" || (e.shiftKey && e.key.toLowerCase() === "z"))) {
-            if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
-            e.preventDefault();
-            triggerRedo();
+            elements.historyTimelineList.innerHTML = `<p style="color: red;">โหลดประวัติล้มเหลว</p>`;
         }
     });
 
-    // Initial check of session
-    updateSessionStatus();
-    loadFilesStatus();
+    elements.btnCloseHistory.addEventListener("click", () => { elements.modalHistory.style.display = "none"; });
+    elements.btnDoneHistory.addEventListener("click", () => { elements.modalHistory.style.display = "none"; });
+
+    // Settings Modal
+    elements.btnOpenSettings.addEventListener("click", () => { elements.modalSettings.style.display = "flex"; });
+    elements.btnCloseSettings.addEventListener("click", () => { elements.modalSettings.style.display = "none"; });
+    elements.btnDoneSettings.addEventListener("click", () => { elements.modalSettings.style.display = "none"; });
+
+    elements.btnSettingsNewSession.addEventListener("click", async () => {
+        if (confirm("ต้องการเริ่มเซสชันใหม่หรือไม่? การกระทำนี้จะล้างข้อมูลและประวัติที่บันทึกไว้")) {
+            await fetch("/api/session/reset", { method: "POST" });
+            elements.modalSettings.style.display = "none";
+            showToast("เริ่มเซสชันใหม่เรียบร้อย", "success");
+            await fetchSystemState();
+            switchView("files");
+        }
+    });
+
+    elements.btnSettingsOpenLogs.addEventListener("click", () => {
+        elements.modalSettings.style.display = "none";
+        elements.modalLogs.style.display = "flex";
+        fetchLogs();
+    });
+
+    // Logs Modal
+    async function fetchLogs() {
+        try {
+            const res = await fetch("/api/logs?lines=200");
+            const data = await res.json();
+            elements.logContentArea.textContent = (data.lines || []).join("\n") || "ไม่มีข้อความ Log";
+            elements.logContentArea.scrollTop = elements.logContentArea.scrollHeight;
+        } catch (e) {
+            elements.logContentArea.textContent = "โหลด Log ล้มเหลว";
+        }
+    }
+
+    elements.btnRefreshLogs.addEventListener("click", fetchLogs);
+    elements.btnCloseLogs.addEventListener("click", () => { elements.modalLogs.style.display = "none"; });
+    elements.btnDoneLogs.addEventListener("click", () => { elements.modalLogs.style.display = "none"; });
+
+    // Exit Application
+    elements.btnExitApp.addEventListener("click", async () => {
+        if (confirm("คุณต้องการปิดและออกจากโปรแกรมหรือไม่?")) {
+            try { await fetch("/api/shutdown?force=true", { method: "POST" }); } catch (e) {}
+            showToast("กำลังปิดโปรแกรม...", "info");
+            setTimeout(() => { window.close(); }, 400);
+        }
+    });
+
+    // Heartbeat & Unload
+    setInterval(() => { fetch("/api/heartbeat").catch(() => {}); }, 3000);
+    window.addEventListener("beforeunload", () => {
+        if (navigator.sendBeacon) navigator.sendBeacon("/api/client_unloading");
+    });
+
+    // Initial Load
+    fetchSystemState();
 });

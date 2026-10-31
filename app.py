@@ -33,7 +33,7 @@ from logger_util import get_system_logger, PRIMARY_LOG_FILE
 
 logger = get_system_logger()
 
-app = FastAPI(title="FTI IT Asset Inventory Compare System", version="1.0.0")
+app = FastAPI(title="FTI IT Asset Inventory Compare System", version="2.0.0")
 
 # Request Logging Middleware (Full Debug)
 @app.middleware("http")
@@ -95,105 +95,63 @@ comparator.autosave_path = AUTOSAVE_FILE
 comparator.sources_dir = SOURCES_DIR
 
 def init_app_session():
-    """Start with restored autosave if present; otherwise fallback to default base files."""
+    """Load session or defaults. Note: Files are loaded into 'loaded' state WITHOUT auto-comparing."""
     try:
-        # 1. Clean up legacy corrupted file if present
+        # 1. Clean legacy
         if os.path.exists(LEGACY_AUTOSAVE_FILE):
-            try:
-                os.remove(LEGACY_AUTOSAVE_FILE)
-            except Exception:
-                pass
+            try: os.remove(LEGACY_AUTOSAVE_FILE)
+            except Exception: pass
 
-        # 2. Try loading from persistent session state
+        # 2. Try loading 2.0 autosave
         restored = comparator.load_autosave(AUTOSAVE_FILE)
         if restored:
-            total = comparator.summary.get('overall', {}).get('total_records', 0)
-            rate = comparator.summary.get('overall', {}).get('match_rate', 0)
-            logger.info(f"Restored previous session from autosave: {total} records, {rate}% match rate", component="AUTOSAVE")
-            # If any DataFrame is still missing in memory, check SOURCES_DIR or BASE_DIR
-            base_file_map = {
-                "master": "0-FTI_asset_HWSWOth.xlsx",
-                "hw": "1-it_asset_HW.xlsx",
-                "sw": "2-it_asset_SW.xlsx",
-                "ups": "3-it_asset_UPS_Monitor.xlsx"
-            }
-            for cat, bfile in base_file_map.items():
-                attr = f"{cat}_df"
-                if getattr(comparator, attr) is None:
-                    src_file = os.path.join(SOURCES_DIR, f"source_{cat}.xlsx")
-                    if os.path.exists(src_file):
-                        try:
-                            setattr(comparator, attr, pd.read_excel(src_file))
-                        except Exception:
-                            pass
-                    else:
-                        src_in_base = os.path.join(BASE_DIR, bfile)
-                        if os.path.exists(src_in_base):
-                            try:
-                                df_base = pd.read_excel(src_in_base)
-                                setattr(comparator, attr, df_base)
-                                import shutil
-                                shutil.copy2(src_in_base, src_file)
-                            except Exception as e_base:
-                                logger.warn(f"Notice loading base file for {cat}: {e_base}", component="AUTOSAVE")
+            logger.info("Restored session from v2 autosave file.", component="AUTOSAVE")
             return
 
-        # 3. If no persistent session exists, check if default base files exist in BASE_DIR
+        # 3. First time fallback: load default base Excel files without comparing
         base_master = os.path.join(BASE_DIR, "0-FTI_asset_HWSWOth.xlsx")
         base_hw = os.path.join(BASE_DIR, "1-it_asset_HW.xlsx")
         base_sw = os.path.join(BASE_DIR, "2-it_asset_SW.xlsx")
         base_ups = os.path.join(BASE_DIR, "3-it_asset_UPS_Monitor.xlsx")
 
         if os.path.exists(base_master) and (os.path.exists(base_hw) or os.path.exists(base_sw) or os.path.exists(base_ups)):
-            logger.info("First-time session: Loading default base Excel files...", component="SESSION")
+            logger.info("First-time session: Loading default base Excel files into loaded state (ready for manual compare)...", component="SESSION")
             import shutil
             if os.path.exists(base_master):
                 comparator.master_filename = "0-FTI_asset_HWSWOth.xlsx"
                 comparator.load_master(base_master)
                 shutil.copy2(base_master, os.path.join(SOURCES_DIR, "source_master.xlsx"))
             if os.path.exists(base_hw):
-                comparator.hw_filename = "1-it_asset_HW.xlsx"
-                comparator.hw_df = pd.read_excel(base_hw)
-                comparator.records["hw"] = comparator._parse_hw_df(comparator.hw_df)
+                comparator.load_category("hw", base_hw, filename="1-it_asset_HW.xlsx")
                 shutil.copy2(base_hw, os.path.join(SOURCES_DIR, "source_hw.xlsx"))
             if os.path.exists(base_sw):
-                comparator.sw_filename = "2-it_asset_SW.xlsx"
-                comparator.sw_df = pd.read_excel(base_sw)
-                comparator.records["sw"] = comparator._parse_sw_df(comparator.sw_df)
+                comparator.load_category("sw", base_sw, filename="2-it_asset_SW.xlsx")
                 shutil.copy2(base_sw, os.path.join(SOURCES_DIR, "source_sw.xlsx"))
             if os.path.exists(base_ups):
-                comparator.ups_filename = "3-it_asset_UPS_Monitor.xlsx"
-                comparator.ups_df = pd.read_excel(base_ups)
-                comparator.records["ups"] = comparator._parse_ups_df(comparator.ups_df)
+                comparator.load_category("ups", base_ups, filename="3-it_asset_UPS_Monitor.xlsx")
                 shutil.copy2(base_ups, os.path.join(SOURCES_DIR, "source_ups.xlsx"))
 
-            comparator.recompare()
             comparator.autosave()
-            logger.info(f"Initialized from base files: {comparator.summary.get('overall', {}).get('total_records', 0)} records loaded and saved.", component="SESSION")
-        else:
-            logger.info("Clean session initialized. Ready for file upload.", component="SESSION")
+            logger.info("Default files loaded in 'loaded' state.", component="SESSION")
     except Exception as e:
         logger.error(f"Error initializing session: {e}", component="SESSION", exc_info=True)
 
-# Initialize on module load
 init_app_session()
 
-
-
-@app.on_event("startup")
-async def on_startup():
-    logger.info("FastAPI application startup completed.", component="SYSTEM")
-
-
 # Pydantic models
-class EditRecordRequest(BaseModel):
+class CellEditRequest(BaseModel):
     uid: str
-    it_emp_id: Optional[str] = None
-    it_emp_name: Optional[str] = None
-    it_dept: Optional[str] = None
-    asset_id: Optional[str] = None
-    it_sn: Optional[str] = None
+    column: str
+    value: Any
     user: Optional[str] = "IT Officer"
+
+class RowExclusionRequest(BaseModel):
+    uid: str
+    exclude: bool
+    user: Optional[str] = "IT Officer"
+
+class RollbackRequest(BaseModel):
+    index: int
 
 last_heartbeat_time = datetime.datetime.now().timestamp()
 unloading_time: Optional[float] = None
@@ -215,19 +173,17 @@ def set_server_instance(srv):
 async def get_heartbeat():
     global last_heartbeat_time, unloading_time
     last_heartbeat_time = datetime.datetime.now().timestamp()
-    unloading_time = None  # Reset unloading status on client active check
+    unloading_time = None
     return {"status": "ok", "time": last_heartbeat_time}
 
 @app.post("/api/client_unloading")
 async def notify_client_unloading():
-    """Client window sent beacon that it is unloading/closing."""
     global unloading_time
     unloading_time = datetime.datetime.now().timestamp()
     return {"status": "acknowledged", "time": unloading_time}
 
 @app.post("/api/shutdown")
 async def request_shutdown(force: bool = False):
-    """Explicit shutdown initiated by user action."""
     global server_ref
     if force and server_ref is not None:
         logger.info("Explicit shutdown requested by user.", component="SYSTEM")
@@ -237,7 +193,6 @@ async def request_shutdown(force: bool = False):
 
 @app.get("/api/logs")
 async def get_system_logs(lines: int = Query(default=150, ge=1, le=2000)):
-    """Fetch live log content for UI diagnostic modal."""
     if not os.path.exists(PRIMARY_LOG_FILE):
         return JSONResponse({"log_file": PRIMARY_LOG_FILE, "lines": []})
     try:
@@ -253,11 +208,9 @@ async def get_system_logs(lines: int = Query(default=150, ge=1, le=2000)):
 
 @app.get("/api/logs/download")
 async def download_system_log():
-    """Download the full fti_debug.log file."""
     if os.path.exists(PRIMARY_LOG_FILE):
         return FileResponse(PRIMARY_LOG_FILE, filename="fti_debug.log", media_type="text/plain")
     raise HTTPException(status_code=404, detail="Log file not found")
-
 
 @app.get("/", response_class=HTMLResponse)
 async def serve_index():
@@ -267,230 +220,14 @@ async def serve_index():
             return HTMLResponse(content=f.read())
     return HTMLResponse("<h1>FTI IT Asset Inventory Compare System</h1><p>UI loading...</p>")
 
-
-@app.get("/api/summary")
-async def get_summary():
-    """Return overall and categorized match rate and metrics."""
-    if not comparator.summary:
-        comparator.recompare()
-    return JSONResponse(comparator.summary)
-
-
-@app.get("/api/records")
-async def get_records(
-    category: str = Query("all", description="all, hw, sw, ups"),
-    mismatch_only: bool = Query(True),
-    filter_type: str = Query("all", description="all, both, emp, dept, scrapped, missing, excluded"),
-    search: str = Query("", description="search query"),
-    page: int = Query(1, ge=1),
-    page_size: int = Query(25, ge=5, le=100000)
-):
-    """Retrieve paginated records with filtering."""
-    offset = (page - 1) * page_size
-
-    # 1. Get raw records based on filter mode
-    if filter_type == "excluded":
-        recs, _ = comparator.get_records(
-            category=category,
-            mismatch_only=False,
-            search=search,
-            limit=999999,
-            offset=0,
-            only_excluded=True
-        )
-    elif filter_type in ("scrapped", "missing"):
-        recs, _ = comparator.get_records(
-            category=category,
-            mismatch_only=False,
-            search=search,
-            limit=999999,
-            offset=0,
-            include_excluded=True
-        )
-    else:
-        recs, _ = comparator.get_records(
-            category=category,
-            mismatch_only=mismatch_only,
-            search=search,
-            limit=999999,
-            offset=0,
-            include_excluded=False
-        )
-
-    # 2. Apply filter_type if specified
-    if filter_type == "both":
-        recs = [r for r in recs if "รหัสพนักงาน + แผนก" in r.get("mismatch_type", "")]
-    elif filter_type == "emp":
-        recs = [r for r in recs if r.get("mismatch_type") == "รหัสพนักงานไม่ตรง"]
-    elif filter_type == "dept":
-        recs = [r for r in recs if r.get("mismatch_type") == "แผนกไม่ตรง"]
-    elif filter_type == "scrapped":
-        recs = [r for r in recs if "ตัดจำหน่าย" in r.get("mismatch_type", "") or "ตัดจำหน่าย" in r.get("exclude_reason", "")]
-    elif filter_type == "missing":
-        recs = [r for r in recs if "ไม่พบ" in r.get("mismatch_type", "") or "ไม่พบ" in r.get("exclude_reason", "") or "ไม่มีรหัสทรัพย์สิน" in r.get("exclude_reason", "")]
-
-    total_count = len(recs)
-    paginated_recs = recs[offset: offset + page_size]
-
-    return JSONResponse({
-        "total": total_count,
-        "total_count": total_count,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total_count + page_size - 1) // page_size if total_count > 0 else 1,
-        "records": paginated_recs
-    })
-
-
-class QuickFixRequest(BaseModel):
-    uid: str
-    user: Optional[str] = "IT Officer"
-
-
-@app.post("/api/quick-fix")
-async def quick_fix_record(req: QuickFixRequest):
-    """Automatically synchronize IT record fields to match ERP AX values."""
-    cat = req.uid.split("_")[0]
-    rec = None
-    for r in comparator.records.get(cat, []):
-        if r["uid"] == req.uid:
-            rec = r
-            break
-    if not rec:
-        raise HTTPException(status_code=404, detail=f"ไม่พบข้อมูลรหัส {req.uid}")
-
-    ax = rec.get("ax_data", {})
-    if not ax or not ax.get("asset_id") or ax.get("is_scrapped"):
-        return JSONResponse({
-            "success": False,
-            "status": "warning",
-            "message": f"รหัส {rec.get('asset_id', req.uid)} ไม่อยู่ในสถานะใช้งานปกติในระบบ ERP สำหรับซิงค์",
-            "summary": comparator.summary
-        })
-
-    fields_to_update = {
-        "it_emp_id": str(ax.get("ax_emp_id", "")).strip(),
-        "it_emp_name": str(ax.get("ax_emp_name", "")).strip(),
-        "it_dept": str(ax.get("ax_dept", "")).strip(),
-    }
-
-    updated = comparator.update_record(req.uid, fields_to_update, user=req.user or "IT Officer")
-    return JSONResponse({
-        "success": True,
-        "status": "success",
-        "message": f"ปรับปรุงข้อมูล {rec.get('asset_id')} ให้ตรงกับ ERP 100% แล้ว",
-        "record": updated,
-        "summary": comparator.summary
-    })
-
-
-class BatchQuickFixRequest(BaseModel):
-    category: Optional[str] = "all"
-    user: Optional[str] = "IT Officer"
-
-
-@app.post("/api/batch-quick-fix")
-async def batch_quick_fix(req: BatchQuickFixRequest = BatchQuickFixRequest()):
-    """Automatically synchronize all active IT records 100% with ERP AX, separate excluded records, verify 3 passes, and save 4-tab files."""
-    res = comparator.batch_quick_fix(category=req.category or "all", user=req.user or "IT Officer")
-    count = res.get('updated_count', 0)
-    excl = res.get('excluded_count', 0)
-    passes = res.get('verification_passes', 3)
-    rate = res.get('new_match_rate', 100.0)
-
-    saved_files = {}
-    try:
-        out_dir = os.path.join(BASE_DIR, "output")
-        saved_files = ReportGenerator.save_all_category_files(comparator, output_dir=out_dir)
-        logger.info(f"Saved 4-tab category Excel files to {out_dir}: {list(saved_files.keys())}", component="EXPORT")
-    except Exception as e_out:
-        logger.warn(f"Notice saving output files during batch_quick_fix: {e_out}", component="EXPORT")
-
-    msg = f"ซิงค์ข้อมูลตรง ERP สมบูรณ์ {rate}% (อัปเดต {count:,} รายการ, คัดแยกแท็บ 4 จำนวน {excl:,} รายการ, ตรวจซ้ำ {passes} รอบ)"
-
-    return JSONResponse({
-        "status": "success",
-        "message": msg,
-        "result": res,
-        "saved_files": saved_files,
-        "summary": comparator.summary,
-        "can_undo": len(comparator.undo_stack) > 0,
-        "can_redo": len(comparator.redo_stack) > 0
-    })
-
-
 # =========================================================================
-# Google Workspace-style Undo, Redo, Version History & Session Reset
+# V2 System State & Comparison API
 # =========================================================================
-@app.post("/api/undo")
-async def undo_action():
-    """Rollback the last action like Google Workspace Ctrl+Z."""
-    res = comparator.undo()
-    logger.info(f"Undo action: {res.get('message')}", component="HISTORY")
-    return JSONResponse(res)
 
-
-@app.post("/api/redo")
-async def redo_action():
-    """Re-apply the undone action (Ctrl+Y)."""
-    res = comparator.redo()
-    logger.info(f"Redo action: {res.get('message')}", component="HISTORY")
-    return JSONResponse(res)
-
-
-@app.get("/api/history")
-async def get_history_timeline():
-    """Return version history timeline of all actions."""
-    return JSONResponse({
-        "history": comparator.get_version_history(),
-        "can_undo": len(comparator.undo_stack) > 0,
-        "can_redo": len(comparator.redo_stack) > 0
-    })
-
-
-class RollbackRequest(BaseModel):
-    index: int
-
-
-@app.post("/api/rollback")
-async def rollback_to_version(req: RollbackRequest):
-    """Rollback to a specific revision in history."""
-    res = comparator.rollback_to_index(req.index)
-    logger.info(f"Rollback to revision {req.index}: {res.get('message')}", component="HISTORY")
-    return JSONResponse(res)
-
-
-@app.post("/api/session/reset")
-async def reset_current_session():
-    """Reset session to clean slate, wiping autosave file."""
-    comparator.reset_session()
-    logger.info("Session reset to clean slate by user.", component="SESSION")
-    return JSONResponse({
-        "success": True,
-        "status": "success",
-        "message": "ล้างข้อมูลทั้งหมดเรียบร้อยแล้ว พร้อมเริ่มเซสชันใหม่",
-        "summary": comparator.summary
-    })
-
-
-@app.get("/api/session/status")
-async def get_session_status():
-    """Get active session details and undo/redo capabilities."""
-    total = comparator.summary.get('overall', {}).get('total_records', 0) if comparator.summary else 0
-    return JSONResponse({
-        "has_data": total > 0 or len(comparator.master_dict) > 0,
-        "total_records": total,
-        "can_undo": len(comparator.undo_stack) > 0,
-        "can_redo": len(comparator.redo_stack) > 0,
-        "history_count": len(comparator.undo_stack),
-        "autosave_path": comparator.autosave_path
-    })
-
-
-@app.get("/api/files-status")
-async def get_files_status():
-    """Return status of all 4 loaded files."""
-    return JSONResponse({
+@app.get("/api/state")
+async def get_system_state():
+    """Return unified application state: file status, category states, summary, and undo/redo capabilities."""
+    files_status = {
         "master": {
             "loaded": len(comparator.master_dict) > 0 or comparator.master_df is not None,
             "rows": len(comparator.master_dict) if len(comparator.master_dict) > 0 else (len(comparator.master_df) if comparator.master_df is not None else 0),
@@ -499,65 +236,190 @@ async def get_files_status():
         "hw": {
             "loaded": len(comparator.records.get("hw", [])) > 0,
             "rows": len(comparator.records.get("hw", [])),
-            "filename": getattr(comparator, "hw_filename", "Hardware Inventory" if len(comparator.records.get("hw", [])) > 0 else None)
+            "filename": getattr(comparator, "hw_filename", "1-it_asset_HW.xlsx" if len(comparator.records.get("hw", [])) > 0 else None),
+            "state": comparator.category_states.get("hw", "empty")
         },
         "sw": {
             "loaded": len(comparator.records.get("sw", [])) > 0,
             "rows": len(comparator.records.get("sw", [])),
-            "filename": getattr(comparator, "sw_filename", "Software Inventory" if len(comparator.records.get("sw", [])) > 0 else None)
+            "filename": getattr(comparator, "sw_filename", "2-it_asset_SW.xlsx" if len(comparator.records.get("sw", [])) > 0 else None),
+            "state": comparator.category_states.get("sw", "empty")
         },
         "ups": {
             "loaded": len(comparator.records.get("ups", [])) > 0,
             "rows": len(comparator.records.get("ups", [])),
-            "filename": getattr(comparator, "ups_filename", "UPS & Monitor Inventory" if len(comparator.records.get("ups", [])) > 0 else None)
+            "filename": getattr(comparator, "ups_filename", "3-it_asset_UPS_Monitor.xlsx" if len(comparator.records.get("ups", [])) > 0 else None),
+            "state": comparator.category_states.get("ups", "empty")
         }
+    }
+
+    return JSONResponse({
+        "files": files_status,
+        "category_states": comparator.category_states,
+        "summary": comparator.summary,
+        "can_undo": len(comparator.undo_stack) > 0,
+        "can_redo": len(comparator.redo_stack) > 0,
+        "history_count": len(comparator.undo_stack)
     })
 
+@app.get("/api/summary")
+async def get_summary():
+    """Return summary for backward compatibility."""
+    return JSONResponse(comparator.summary)
 
-@app.post("/api/correct")
-async def correct_record(req: EditRecordRequest):
-    """Update fields of an in-memory inventory record."""
-    fields_to_update = {}
-    if req.it_emp_id is not None:
-        fields_to_update["it_emp_id"] = req.it_emp_id.strip()
-    if req.it_emp_name is not None:
-        fields_to_update["it_emp_name"] = req.it_emp_name.strip()
-    if req.it_dept is not None:
-        fields_to_update["it_dept"] = req.it_dept.strip()
-    if req.asset_id is not None:
-        fields_to_update["asset_id"] = req.asset_id.strip().upper()
-    if req.it_sn is not None:
-        fields_to_update["it_sn"] = req.it_sn.strip()
+@app.post("/api/compare/{category}")
+async def compare_single_category(category: str):
+    """Trigger explicit comparison for a specific category."""
+    if category not in ("hw", "sw", "ups"):
+        raise HTTPException(status_code=400, detail="Category must be hw, sw, or ups")
 
-    updated = comparator.update_record(req.uid, fields_to_update, user=req.user or "IT Officer")
+    if len(comparator.master_dict) == 0:
+        raise HTTPException(status_code=400, detail="กรุณาอัปโหลดไฟล์หลัก ERP (Master) ก่อนทำการเปรียบเทียบ")
+
+    if len(comparator.records.get(category, [])) == 0:
+        raise HTTPException(status_code=400, detail=f"ยังไม่มีข้อมูลไฟล์ {category.upper()} สำหรับเปรียบเทียบ")
+
+    cat_summary = comparator.compare_category(category)
+    logger.info(f"Explicit comparison completed for {category.upper()}: {cat_summary.get('match_rate')}% match rate", component="COMPARE")
+
+    return JSONResponse({
+        "status": "success",
+        "category": category,
+        "category_state": comparator.category_states.get(category),
+        "summary": comparator.summary,
+        "category_summary": cat_summary
+    })
+
+@app.get("/api/grid/{category}")
+async def get_category_grid(
+    category: str,
+    filter_type: str = Query("all", description="all, mismatch, match, excluded, user_edited"),
+    search: str = Query("", description="search query"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100000)
+):
+    """Retrieve full spreadsheet grid for category: column schema and paginated rows with full cells and ERP comparison."""
+    if category not in ("hw", "sw", "ups"):
+        raise HTTPException(status_code=400, detail="Category must be hw, sw, or ups")
+
+    all_recs = comparator.records.get(category, [])
+    cols = comparator.columns.get(category, [])
+    if not cols and all_recs:
+        cols = list(all_recs[0]["cells"].keys())
+
+    # Filter logic
+    filtered = all_recs
+    if filter_type == "mismatch":
+        filtered = [r for r in filtered if not r.get("is_excluded") and r.get("is_match") is False]
+    elif filter_type == "match":
+        filtered = [r for r in filtered if not r.get("is_excluded") and r.get("is_match") is True]
+    elif filter_type == "excluded":
+        filtered = [r for r in filtered if r.get("is_excluded") is True]
+    elif filter_type == "user_edited":
+        filtered = [r for r in filtered if len(r.get("user_edited_cols", [])) > 0]
+
+    # Search query across all cells and metadata
+    if search:
+        q = search.lower().strip()
+        def matches_rec(r):
+            # check cells
+            for val in r.get("cells", {}).values():
+                if q in str(val).lower():
+                    return True
+            # check ax_data
+            ax = r.get("ax_data", {})
+            for val in ax.values():
+                if q in str(val).lower():
+                    return True
+            # check mismatch/exclude reasons
+            if q in str(r.get("mismatch_type", "")).lower() or q in str(r.get("exclude_reason", "")).lower():
+                return True
+            return False
+        filtered = [r for r in filtered if matches_rec(r)]
+
+    total_count = len(filtered)
+    offset = (page - 1) * page_size
+    paginated_recs = filtered[offset: offset + page_size]
+
+    return JSONResponse({
+        "category": category,
+        "category_state": comparator.category_states.get(category, "empty"),
+        "columns": cols,
+        "total": total_count,
+        "total_count": total_count,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total_count + page_size - 1) // page_size if total_count > 0 else 1,
+        "records": paginated_recs
+    })
+
+@app.patch("/api/cell")
+async def update_cell_value(req: CellEditRequest):
+    """Update a single cell in spreadsheet mode."""
+    updated = comparator.update_cell(req.uid, req.column, req.value, user=req.user or "IT Officer")
     if not updated:
         raise HTTPException(status_code=404, detail=f"Record {req.uid} not found")
 
+    cat = req.uid.split("_")[0]
     return JSONResponse({
         "status": "success",
-        "message": f"Updated record {req.uid}",
         "record": updated,
-        "summary": comparator.summary
+        "summary": comparator.summary,
+        "category_summary": comparator.summary.get("by_category", {}).get(cat, {}),
+        "can_undo": len(comparator.undo_stack) > 0,
+        "can_redo": len(comparator.redo_stack) > 0
     })
 
+@app.post("/api/row/exclusion")
+async def toggle_row_exclusion(req: RowExclusionRequest):
+    """Manually move row between active (Tab 3) and excluded (Tab 4)."""
+    updated = comparator.set_row_exclusion(req.uid, req.exclude, user=req.user or "IT Officer")
+    if not updated:
+        raise HTTPException(status_code=404, detail=f"Record {req.uid} not found")
 
-@app.post("/api/recompare")
-async def recompare_data():
-    """Trigger complete re-comparison and refresh KPI statistics."""
-    summary = comparator.recompare()
+    cat = req.uid.split("_")[0]
     return JSONResponse({
         "status": "success",
-        "message": "Re-comparison complete",
-        "summary": summary
+        "record": updated,
+        "summary": comparator.summary,
+        "category_summary": comparator.summary.get("by_category", {}).get(cat, {}),
+        "can_undo": len(comparator.undo_stack) > 0,
+        "can_redo": len(comparator.redo_stack) > 0
     })
 
+@app.post("/api/auto-fix/{category}")
+async def auto_fix_category(category: str):
+    """Run Auto-Fix on a specific category (or all) respecting user-edited cells."""
+    if category not in ("hw", "sw", "ups", "all"):
+        raise HTTPException(status_code=400, detail="Category must be hw, sw, ups, or all")
+
+    res = comparator.batch_quick_fix(category=category, user="IT Officer")
+
+    # Persist updated 4-tab Excel file
+    try:
+        out_dir = os.path.join(BASE_DIR, "output")
+        ReportGenerator.save_all_category_files(comparator, output_dir=out_dir)
+    except Exception as e:
+        logger.warn(f"Notice saving Excel after auto-fix: {e}", component="EXPORT")
+
+    return JSONResponse({
+        "status": "success",
+        "result": res,
+        "summary": comparator.summary,
+        "can_undo": len(comparator.undo_stack) > 0,
+        "can_redo": len(comparator.redo_stack) > 0
+    })
+
+# =========================================================================
+# File Upload & Ingestion (Manual Compare: Stale/Loaded States)
+# =========================================================================
 
 @app.post("/api/upload")
 async def upload_files(
     file_type: str = Form(..., description="master, hw, sw, ups"),
     file: UploadFile = File(...)
 ):
-    """Upload new Excel file dynamically."""
+    """Upload new Excel file dynamically into 'loaded' state (does NOT auto-compare)."""
     if not file.filename.endswith(('.xlsx', '.xls')):
         raise HTTPException(status_code=400, detail="Only .xlsx or .xls files are supported")
 
@@ -567,7 +429,6 @@ async def upload_files(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to parse Excel file: {str(e)}")
 
-    # Persist the exact uploaded Excel file to SOURCES_DIR for session continuity
     try:
         src_target = os.path.join(SOURCES_DIR, f"source_{file_type}.xlsx")
         with open(src_target, "wb") as f_src:
@@ -578,75 +439,81 @@ async def upload_files(
     if file_type == "master":
         comparator.master_filename = file.filename
         comparator.load_master(df)
-        comparator.recompare()
-        comparator.autosave()
-        return JSONResponse({"status": "success", "message": f"โหลดไฟล์หลัก ERP สำเร็จ ({len(df):,} รายการ)", "filename": file.filename})
-    elif file_type == "hw":
-        comparator.hw_filename = file.filename
-        comparator.hw_df = df
-        comparator.records["hw"] = comparator._parse_hw_df(df)
-    elif file_type == "sw":
-        comparator.sw_filename = file.filename
-        comparator.sw_df = df
-        comparator.records["sw"] = comparator._parse_sw_df(df)
-    elif file_type == "ups":
-        comparator.ups_filename = file.filename
-        comparator.ups_df = df
-        comparator.records["ups"] = comparator._parse_ups_df(df)
+        msg = f"โหลดไฟล์หลัก ERP สำเร็จ ({len(df):,} รายการ) — ทุกหมวดพร้อมสำหรับเปรียบเทียบใหม่"
+    elif file_type in ("hw", "sw", "ups"):
+        comparator.load_category(file_type, df, filename=file.filename)
+        msg = f"อัปโหลดไฟล์ {file_type.upper()} สำเร็จ ({len(df):,} รายการ) — พร้อมให้กดเปรียบเทียบ"
     else:
         raise HTTPException(status_code=400, detail="Invalid file_type")
 
-    comparator.recompare()
-    comparator.autosave()
-
     return JSONResponse({
         "status": "success",
-        "message": f"อัปโหลดไฟล์ {file_type.upper()} สำเร็จ ({len(df):,} รายการ)",
+        "message": msg,
         "filename": file.filename,
+        "category_states": comparator.category_states,
         "summary": comparator.summary
     })
 
+# =========================================================================
+# Google Workspace-style Undo, Redo, Version History & Session Reset
+# =========================================================================
+@app.post("/api/undo")
+async def undo_action():
+    res = comparator.undo()
+    return JSONResponse(res)
 
-@app.post("/api/reset")
-async def reset_data():
-    """Reset all records and start clean session."""
+@app.post("/api/redo")
+async def redo_action():
+    res = comparator.redo()
+    return JSONResponse(res)
+
+@app.get("/api/history")
+async def get_history_timeline():
+    return JSONResponse({
+        "history": comparator.get_version_history(),
+        "can_undo": len(comparator.undo_stack) > 0,
+        "can_redo": len(comparator.redo_stack) > 0
+    })
+
+@app.post("/api/rollback")
+async def rollback_to_version(req: RollbackRequest):
+    res = comparator.rollback_to_index(req.index)
+    return JSONResponse(res)
+
+@app.post("/api/session/reset")
+async def reset_current_session():
     comparator.reset_session()
     return JSONResponse({
+        "success": True,
         "status": "success",
-        "message": "ล้างข้อมูลทั้งหมดแล้ว พร้อมเริ่มเซสชันใหม่",
+        "message": "ล้างข้อมูลทั้งหมดเรียบร้อยแล้ว พร้อมเริ่มเซสชันใหม่",
         "summary": comparator.summary
     })
 
-
-@app.get("/api/changelog")
-async def get_changelog():
-    """Return list of edits made during the session."""
+@app.get("/api/session/status")
+async def get_session_status():
+    total = comparator.summary.get('overall', {}).get('total_records', 0) if comparator.summary else 0
     return JSONResponse({
-        "total_edits": len(comparator.changelog),
-        "changelog": comparator.changelog
+        "has_data": total > 0 or len(comparator.master_dict) > 0,
+        "total_records": total,
+        "can_undo": len(comparator.undo_stack) > 0,
+        "can_redo": len(comparator.redo_stack) > 0,
+        "history_count": len(comparator.undo_stack),
+        "autosave_path": comparator.autosave_path
     })
 
-
-@app.get("/api/export/report")
-async def export_mismatch_report(category: Optional[str] = Query("all")):
-    """Download styled Excel mismatch report directly."""
-    buf = ReportGenerator.generate_mismatch_report_bytes(comparator, category=category)
-    now_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    prefix = category.upper() if category and category != "all" else "ALL"
-    filename = f"{prefix}_Mismatch_Report_{now_str}.xlsx"
-
-    return StreamingResponse(
-        buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename={filename}"}
-    )
-
+# =========================================================================
+# Excel & ZIP Exports (Reflecting 4-Tabs with exact cell edits)
+# =========================================================================
 
 @app.get("/api/export/inventory/{category}")
 async def export_inventory_file(category: str):
-    """Download 4-tab reconciled inventory Excel file (1-it_asset_HW.xlsx, 2-it_asset_SW.xlsx, 3-it_asset_UPS_Monitor.xlsx)."""
+    """Download 4-tab reconciled inventory Excel file."""
     if category not in ("hw", "sw", "ups"):
         raise HTTPException(status_code=400, detail="Category must be hw, sw, or ups")
+
+    if comparator.category_states.get(category) != "compared":
+        raise HTTPException(status_code=409, detail=f"กรุณากดเปรียบเทียบหมวด {category.upper()} ก่อนทำการดาวน์โหลดไฟล์")
 
     try:
         buf = ReportGenerator.export_corrected_inventory_bytes(comparator, category)
@@ -657,7 +524,6 @@ async def export_inventory_file(category: str):
         }
         filename = name_map[category]
 
-        # Also persist the latest 4-tab file into output/ folder automatically
         try:
             out_dir = os.path.join(BASE_DIR, "output")
             os.makedirs(out_dir, exist_ok=True)
@@ -676,12 +542,14 @@ async def export_inventory_file(category: str):
         logger.error(f"Error exporting corrected inventory ({category}): {e}", component="EXPORT", exc_info=True)
         raise HTTPException(status_code=500, detail=f"เกิดข้อผิดพลาดในการสร้างไฟล์ Inventory: {str(e)}")
 
-
 @app.get("/api/export/inventory-all")
 async def export_all_inventories_zip():
-    """Download all 3 4-tab inventory files (1-it_asset_HW.xlsx, 2-it_asset_SW.xlsx, 3-it_asset_UPS_Monitor.xlsx) in a ZIP archive."""
+    """Download all compared 4-tab inventory files in a ZIP archive."""
     try:
-        # Also save to output/ directory
+        any_compared = any(state == "compared" for state in comparator.category_states.values())
+        if not any_compared:
+            raise HTTPException(status_code=409, detail="ยังไม่มีหมวดหมู่ที่เปรียบเทียบแล้ว กรุณากดเปรียบเทียบอย่างน้อย 1 หมวดหมู่")
+
         try:
             out_dir = os.path.join(BASE_DIR, "output")
             ReportGenerator.save_all_category_files(comparator, output_dir=out_dir)
@@ -694,6 +562,8 @@ async def export_all_inventories_zip():
             media_type="application/zip",
             headers={"Content-Disposition": "attachment; filename=FTI_IT_Asset_100Percent_All_3_Files.zip"}
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error exporting all inventories zip: {e}", component="EXPORT", exc_info=True)
         raise HTTPException(status_code=500, detail=f"เกิดข้อผิดพลาดในการสร้างไฟล์ ZIP: {str(e)}")

@@ -29,6 +29,30 @@ DEPT_CODE_MAP = {
     "9999": {"codes": ["JVC"], "keywords": ["ร่วมทุน", "บจ.ร่วมทุน"]},
 }
 
+COLUMN_MAP = {
+    "hw": {
+        "asset_id": "เลขที่ทรัพย์สิน",
+        "emp_id": "รหัสพนักงาน",
+        "emp_name": "ผู้ใช้งาน/ดูแล",
+        "dept": "สถานที่เก็บ",
+        "sn": "S/N"
+    },
+    "sw": {
+        "asset_id": "เลขที่ทรัพย์สิน",
+        "emp_id": "รหัสพนักงาน",
+        "emp_name": "ผู้ดูแล",
+        "dept": "สถานที่เก็บ",
+        "sn": "Key License"
+    },
+    "ups": {
+        "asset_id": "เลขที่ทรัพย์สิน",
+        "emp_id": "รหัสพนักงาน",
+        "emp_name": "ผู้ใช้งาน/ดูแล",
+        "dept": "สถานที่เก็บ",
+        "sn": "S/N"
+    }
+}
+
 def clean_val(val: Any) -> str:
     """Normalize general value to clean string."""
     if val is None or pd.isna(val):
@@ -72,7 +96,7 @@ def is_dept_match(it_dept_raw: Any, ax_dept_raw: Any, ax_loc_code: Any) -> bool:
     1. If both are empty -> Match
     2. If one is empty and other isn't -> Mismatch
     3. Exact text match
-    4. Code prefix mapping (e.g. '1004' in IT matches 'ITD' or 'เทคโนโลยีและสารสนเทศ' in AX)
+    4. Code prefix mapping
     5. Substring inclusion
     """
     it_raw = clean_val(it_dept_raw)
@@ -94,14 +118,11 @@ def is_dept_match(it_dept_raw: Any, ax_dept_raw: Any, ax_loc_code: Any) -> bool:
     m = re.match(r'^([0-9.]+)', it_raw)
     if m:
         prefix = m.group(1)
-        # Check specific prefix or base prefix (1001 from 1001.1)
         base_prefix = prefix.split('.')[0] if '.' in prefix else prefix
         rule = DEPT_CODE_MAP.get(prefix) or DEPT_CODE_MAP.get(base_prefix)
         if rule:
-            # Check AX location code
             if ax_code and ax_code in rule["codes"]:
                 return True
-            # Check AX department keywords
             for kw in rule["keywords"]:
                 if kw in ax_clean or ax_clean in kw:
                     return True
@@ -125,29 +146,42 @@ def is_scrapped(status_val: Any, search_name_val: Any) -> bool:
 
 
 class InventoryComparator:
-    """Main comparison engine for ERP Master vs IT Inventory files."""
+    """Enhanced Multi-Category Comparison Engine with Per-Category Lifecycle & Spreadsheet Cell Editing."""
 
     def __init__(self):
         self.master_df: Optional[pd.DataFrame] = None
         self.master_dict: Dict[str, Dict[str, Any]] = {}
-        
-        # Raw Dataframes
+
+        # Raw DataFrames & Columns per category
         self.hw_df: Optional[pd.DataFrame] = None
         self.sw_df: Optional[pd.DataFrame] = None
         self.ups_df: Optional[pd.DataFrame] = None
         
+        self.columns: Dict[str, List[str]] = {
+            "hw": [],
+            "sw": [],
+            "ups": []
+        }
+
+        # Category status: 'empty' | 'loaded' | 'stale' | 'compared'
+        self.category_states: Dict[str, str] = {
+            "hw": "empty",
+            "sw": "empty",
+            "ups": "empty"
+        }
+
         # Working editable records: Dict of category -> List of dicts
         self.records: Dict[str, List[Dict[str, Any]]] = {
             "hw": [],
             "sw": [],
             "ups": []
         }
-        
-        # Summary results cached
+
+        # Summary results cached per category and overall
         self.summary: Dict[str, Any] = {}
         self.changelog: List[Dict[str, Any]] = []
 
-        # Google Workspace-style Undo/Redo & Rollback stacks
+        # Undo/Redo & Rollback stacks
         self.undo_stack: List[Dict[str, Any]] = []
         self.redo_stack: List[Dict[str, Any]] = []
         self.autosave_path: Optional[str] = None
@@ -160,12 +194,12 @@ class InventoryComparator:
         self.ups_filename: Optional[str] = None
 
     def load_master(self, filepath_or_df) -> int:
-        """Load and index the master ERP file."""
+        """Load and index the master ERP file. Marks all loaded categories as 'stale'."""
         if isinstance(filepath_or_df, pd.DataFrame):
             df = filepath_or_df.copy()
         else:
             df = pd.read_excel(filepath_or_df)
-            
+
         self.master_df = df
         self.master_dict.clear()
 
@@ -174,15 +208,6 @@ class InventoryComparator:
             if not asset_no:
                 continue
 
-            # AX Columns:
-            # WorkName = AX Employee Name
-            # Name2 = AX Department Name
-            # Location = AX Location Code (e.g. ITD, HRD)
-            # Responsible = AX Employee ID
-            # Name = AX Asset Name
-            # Serial number = AX S/N
-            # Status = AX Status
-            # Search name = AX Search Name
             self.master_dict[asset_no] = {
                 "asset_id": asset_no,
                 "ax_emp_name": clean_val(row.get("WorkName")),
@@ -197,166 +222,83 @@ class InventoryComparator:
                 "is_scrapped": is_scrapped(row.get("Status"), row.get("Search name")),
                 "master_row_idx": idx
             }
+
+        # When Master changes, any category already loaded or compared becomes stale
+        for cat in ["hw", "sw", "ups"]:
+            if self.category_states.get(cat) in ("loaded", "compared", "stale"):
+                self.category_states[cat] = "stale"
+                # Clear previous comparison results since master changed
+                for r in self.records.get(cat, []):
+                    r["is_match"] = None
+                    r["mismatch_type"] = "รอเปรียบเทียบใหม่ (Master เปลี่ยน)"
+                    r["diff_fields"] = []
+                    r["ax_data"] = {}
+
+        self.recompute_overall_summary()
+        self.autosave()
         return len(self.master_dict)
 
-    def load_inventory_files(self, hw_source, sw_source, ups_source) -> Dict[str, int]:
-        """Load the three inventory files into internal records."""
-        counts = {}
+    def load_category(self, category: str, filepath_or_df, filename: Optional[str] = None) -> int:
+        """Load category Excel file without auto-comparing. Sets state to 'loaded'."""
+        if category not in ("hw", "sw", "ups"):
+            raise ValueError(f"Unknown category: {category}")
 
-        # 1. Hardware
-        if hw_source is not None:
-            self.hw_df = hw_source if isinstance(hw_source, pd.DataFrame) else pd.read_excel(hw_source)
-            self.records["hw"] = self._parse_hw_df(self.hw_df)
-            counts["hw"] = len(self.records["hw"])
+        if isinstance(filepath_or_df, pd.DataFrame):
+            df = filepath_or_df.copy()
+        else:
+            df = pd.read_excel(filepath_or_df)
 
-        # 2. Software
-        if sw_source is not None:
-            self.sw_df = sw_source if isinstance(sw_source, pd.DataFrame) else pd.read_excel(sw_source)
-            self.records["sw"] = self._parse_sw_df(self.sw_df)
-            counts["sw"] = len(self.records["sw"])
+        setattr(self, f"{category}_df", df)
+        if filename:
+            setattr(self, f"{category}_filename", filename)
 
-        # 3. UPS & Monitor
-        if ups_source is not None:
-            self.ups_df = ups_source if isinstance(ups_source, pd.DataFrame) else pd.read_excel(ups_source)
-            self.records["ups"] = self._parse_ups_df(self.ups_df)
-            counts["ups"] = len(self.records["ups"])
+        self.columns[category] = list(df.columns)
+        records = []
 
-        # Run initial comparison
-        self.recompare()
+        for idx, row in df.iterrows():
+            cells = {col: clean_val(row[col]) for col in df.columns}
+            records.append({
+                "uid": f"{category}_{idx}",
+                "category": category,
+                "row_index": idx,
+                "cells": cells,
+                "orig_cells": copy.deepcopy(cells),
+                "user_edited_cols": [],
+                "manual_exclude": None, # None = auto, True = user excluded, False = user included
+                "is_excluded": False,
+                "exclude_reason": "",
+                "is_match": None,
+                "mismatch_type": "ยังไม่ได้เปรียบเทียบ",
+                "diff_fields": [],
+                "ax_data": {}
+            })
+
+        self.records[category] = records
+        self.category_states[category] = "loaded"
+        self.recompute_overall_summary()
         self.autosave()
+        return len(records)
+
+    def load_inventory_files(self, hw_source, sw_source, ups_source) -> Dict[str, int]:
+        """Load multiple files (compat helper). Does NOT auto-compare."""
+        counts = {}
+        if hw_source is not None:
+            counts["hw"] = self.load_category("hw", hw_source)
+        if sw_source is not None:
+            counts["sw"] = self.load_category("sw", sw_source)
+        if ups_source is not None:
+            counts["ups"] = self.load_category("ups", ups_source)
         return counts
 
-    def _parse_hw_df(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        records = []
-        for idx, row in df.iterrows():
-            asset_id = clean_asset_id(row.get("เลขที่ทรัพย์สิน"))
-            asset_type = clean_val(row.get("ประเภททรัพย์สิน")) or "PC"
-            it_emp_id = clean_emp_id(row.get("รหัสพนักงาน"))
-            it_emp_name = clean_val(row.get("ผู้ใช้งาน/ดูแล"))
-            it_dept = clean_val(row.get("สถานที่เก็บ"))
-            it_sn = clean_val(row.get("S/N"))
-            records.append({
-                "uid": f"hw_{idx}",
-                "category": "hw",
-                "row_index": idx,
-                "asset_id": asset_id,
-                "it_record_id": clean_val(row.get("Record-ID")),
-                "it_emp_id": it_emp_id,
-                "it_emp_name": it_emp_name,
-                "it_dept": it_dept,
-                "it_asset_name": clean_val(row.get("ชื่อทรัพย์สิน")),
-                "it_asset_type": asset_type,
-                "it_sn": it_sn,
-                "it_pc_name": clean_val(row.get("PC_Name")),
-                "it_monitor_asset": clean_val(row.get("รหัสทรัพย์สิน Monitor")),
-                "it_ups_asset": clean_val(row.get("รหัสทรัพย์สิน UPS")),
-                "it_check_status": clean_val(row.get("สถานะ(การตรวจสอบ)")),
-                "it_remark": clean_val(row.get("AssetRemark")),
-                # Original snapshot for 4-Tab comparison & audit
-                "orig_asset_id": asset_id,
-                "orig_it_emp_id": it_emp_id,
-                "orig_it_emp_name": it_emp_name,
-                "orig_it_dept": it_dept,
-                "orig_it_sn": it_sn,
-                "orig_is_match": None,
-                "orig_mismatch_type": "",
-                "orig_diff_fields": [],
-                # Exclusion tracking
-                "is_excluded": False,
-                "exclude_reason": "",
-                # Will be populated by comparison
-                "is_match": True,
-                "mismatch_type": "",
-                "diff_fields": [],
-                "ax_data": {}
-            })
-        return records
-
-    def _parse_sw_df(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        records = []
-        for idx, row in df.iterrows():
-            asset_id = clean_asset_id(row.get("เลขที่ทรัพย์สิน"))
-            it_emp_id = clean_emp_id(row.get("รหัสพนักงาน"))
-            it_emp_name = clean_val(row.get("ผู้ดูแล"))
-            it_dept = clean_val(row.get("สถานที่เก็บ"))
-            it_sn = clean_val(row.get("Key License"))
-            records.append({
-                "uid": f"sw_{idx}",
-                "category": "sw",
-                "row_index": idx,
-                "asset_id": asset_id,
-                "it_record_id": clean_val(row.get("IdAssetRecId")),
-                "it_emp_id": it_emp_id,
-                "it_emp_name": it_emp_name,
-                "it_dept": it_dept,
-                "it_asset_name": clean_val(row.get("ชื่อ Software")),
-                "it_asset_type": "Software",
-                "it_sn": it_sn,
-                "it_pc_name": clean_val(row.get("PCName")),
-                "it_license_key": it_sn,
-                "it_software_code": clean_val(row.get("รหัส Software")),
-                "it_check_fixasset": clean_val(row.get("Check FixAsset")),
-                # Original snapshot for 4-Tab comparison & audit
-                "orig_asset_id": asset_id,
-                "orig_it_emp_id": it_emp_id,
-                "orig_it_emp_name": it_emp_name,
-                "orig_it_dept": it_dept,
-                "orig_it_sn": it_sn,
-                "orig_is_match": None,
-                "orig_mismatch_type": "",
-                "orig_diff_fields": [],
-                # Exclusion tracking
-                "is_excluded": False,
-                "exclude_reason": "",
-                "is_match": True,
-                "mismatch_type": "",
-                "diff_fields": [],
-                "ax_data": {}
-            })
-        return records
-
-    def _parse_ups_df(self, df: pd.DataFrame) -> List[Dict[str, Any]]:
-        records = []
-        for idx, row in df.iterrows():
-            asset_id = clean_asset_id(row.get("เลขที่ทรัพย์สิน"))
-            asset_type = clean_val(row.get("ประเภททรัพย์สิน")) or "UPS/Monitor"
-            it_emp_id = clean_emp_id(row.get("รหัสพนักงาน"))
-            it_emp_name = clean_val(row.get("ผู้ใช้งาน/ดูแล"))
-            it_dept = clean_val(row.get("สถานที่เก็บ"))
-            it_sn = clean_val(row.get("S/N"))
-            records.append({
-                "uid": f"ups_{idx}",
-                "category": "ups",
-                "row_index": idx,
-                "asset_id": asset_id,
-                "it_record_id": clean_val(row.get("Record-ID")),
-                "it_emp_id": it_emp_id,
-                "it_emp_name": it_emp_name,
-                "it_dept": it_dept,
-                "it_asset_name": clean_val(row.get("ชื่อทรัพย์สิน")),
-                "it_asset_type": asset_type,
-                "it_sn": it_sn,
-                "it_pc_name": clean_val(row.get("PC_Name")),
-                "it_check_status": clean_val(row.get("สถานะ(การตรวจสอบ)")),
-                "it_remark": clean_val(row.get("AssetRemark")),
-                # Original snapshot for 4-Tab comparison & audit
-                "orig_asset_id": asset_id,
-                "orig_it_emp_id": it_emp_id,
-                "orig_it_emp_name": it_emp_name,
-                "orig_it_dept": it_dept,
-                "orig_it_sn": it_sn,
-                "orig_is_match": None,
-                "orig_mismatch_type": "",
-                "orig_diff_fields": [],
-                # Exclusion tracking
-                "is_excluded": False,
-                "exclude_reason": "",
-                "is_match": True,
-                "mismatch_type": "",
-                "diff_fields": [],
-                "ax_data": {}
-            })
-        return records
+    def _get_key_fields(self, category: str, cells: Dict[str, Any]) -> Tuple[str, str, str, str, str]:
+        """Extract (asset_id, emp_id, emp_name, dept, sn) from cells using COLUMN_MAP."""
+        cmap = COLUMN_MAP.get(category, {})
+        aid = clean_asset_id(cells.get(cmap.get("asset_id", ""), ""))
+        emp_id = clean_emp_id(cells.get(cmap.get("emp_id", ""), ""))
+        emp_name = clean_val(cells.get(cmap.get("emp_name", ""), ""))
+        dept = clean_val(cells.get(cmap.get("dept", ""), ""))
+        sn = clean_val(cells.get(cmap.get("sn", ""), ""))
+        return aid, emp_id, emp_name, dept, sn
 
     def _evaluate_values_against_erp(self, asset_id: str, it_emp_id: str, it_dept: str) -> Tuple[bool, str, List[str], Dict[str, Any]]:
         """Evaluate specific IT values against ERP master_dict and return (is_match, mismatch_type, diff_fields, ax_data)."""
@@ -393,40 +335,67 @@ class InventoryComparator:
         else:
             return True, "ตรงกันสมบูรณ์", [], ax_copy
 
-    def compare_single_record(self, rec: Dict[str, Any]) -> None:
-        """Compare a single inventory record with ERP master data and preserve original baseline."""
-        # Ensure original fields exist
-        if "orig_asset_id" not in rec:
-            rec["orig_asset_id"] = rec.get("asset_id", "")
-            rec["orig_it_emp_id"] = rec.get("it_emp_id", "")
-            rec["orig_it_emp_name"] = rec.get("it_emp_name", "")
-            rec["orig_it_dept"] = rec.get("it_dept", "")
-            rec["orig_it_sn"] = rec.get("it_sn", "")
+    def evaluate_single_record(self, rec: Dict[str, Any]) -> None:
+        """Evaluate matching status for a single record based on its current cells and manual_exclude."""
+        cat = rec["category"]
+        cells = rec["cells"]
+        aid, emp_id, emp_name, dept, sn = self._get_key_fields(cat, cells)
 
-        # Compute original baseline if master_dict is loaded and not yet computed
-        if self.master_dict and not rec.get("orig_mismatch_type"):
-            o_match, o_mtype, o_diffs, _ = self._evaluate_values_against_erp(
-                rec.get("orig_asset_id", rec.get("asset_id", "")),
-                rec.get("orig_it_emp_id", rec.get("it_emp_id", "")),
-                rec.get("orig_it_dept", rec.get("it_dept", ""))
-            )
-            rec["orig_is_match"] = o_match
-            rec["orig_mismatch_type"] = o_mtype
-            rec["orig_diff_fields"] = o_diffs
-
-        # Evaluate current state
-        is_match, m_type, diff_fields, ax_copy = self._evaluate_values_against_erp(
-            rec.get("asset_id", ""),
-            rec.get("it_emp_id", ""),
-            rec.get("it_dept", "")
-        )
-        rec["is_match"] = is_match
-        rec["mismatch_type"] = m_type
-        rec["diff_fields"] = diff_fields
+        # Baseline evaluation against ERP
+        is_match, m_type, diff_fields, ax_copy = self._evaluate_values_against_erp(aid, emp_id, dept)
         rec["ax_data"] = ax_copy
 
-    def recompare(self) -> Dict[str, Any]:
-        """Re-run comparison across all records and recalculate statistics (supporting 100% active reconciliation)."""
+        # Check exclusion rules
+        if rec.get("manual_exclude") is True:
+            rec["is_excluded"] = True
+            rec["exclude_reason"] = "ผู้ใช้กำหนดให้ตัดออกเอง"
+            rec["is_match"] = False
+            rec["mismatch_type"] = "ตัดออกโดยผู้ใช้"
+            rec["diff_fields"] = diff_fields
+            return
+
+        if rec.get("manual_exclude") is False:
+            # Force include
+            rec["is_excluded"] = False
+            rec["exclude_reason"] = ""
+            rec["is_match"] = is_match
+            rec["mismatch_type"] = m_type
+            rec["diff_fields"] = diff_fields
+            return
+
+        # Automatic exclusion
+        if not aid or not ax_copy or ax_copy.get("is_scrapped"):
+            rec["is_excluded"] = True
+            rec["exclude_reason"] = (
+                "ไม่มีรหัสทรัพย์สิน (Asset ID Missing)" if not aid
+                else ("ไม่พบในระบบ ERP (มีเฉพาะใน IT)" if not ax_copy else "ตัดจำหน่ายใน ERP แต่ IT ยังมีใช้งาน")
+            )
+            rec["is_match"] = False
+            rec["mismatch_type"] = rec["exclude_reason"]
+            rec["diff_fields"] = diff_fields
+        else:
+            rec["is_excluded"] = False
+            rec["exclude_reason"] = ""
+            rec["is_match"] = is_match
+            rec["mismatch_type"] = m_type
+            rec["diff_fields"] = diff_fields
+
+    def compare_category(self, category: str) -> Dict[str, Any]:
+        """Perform comparison on a single category, changing its state to 'compared'."""
+        if category not in ("hw", "sw", "ups"):
+            raise ValueError(f"Unknown category: {category}")
+
+        recs = self.records.get(category, [])
+        for r in recs:
+            self.evaluate_single_record(r)
+
+        self.category_states[category] = "compared"
+        self.recompute_overall_summary()
+        self.autosave()
+        return self.summary.get("by_category", {}).get(category, {})
+
+    def recompute_overall_summary(self) -> Dict[str, Any]:
+        """Recalculate summary metrics per category and overall."""
         summary = {
             "overall": {
                 "total_initial_records": 0,
@@ -434,10 +403,12 @@ class InventoryComparator:
                 "matched_records": 0,
                 "mismatched_records": 0,
                 "excluded_records": 0,
+                "user_edited_records": 0,
                 "match_rate": 0.0,
                 "verified_100_percent": False,
                 "verification_passes": 0
             },
+            "category_states": copy.deepcopy(self.category_states),
             "by_category": {},
             "mismatch_breakdown": {
                 "รหัสพนักงาน + แผนกไม่ตรง": 0,
@@ -453,63 +424,70 @@ class InventoryComparator:
                 "ไม่พบในระบบ ERP (มีเฉพาะใน IT)": 0,
                 "ไม่มีรหัสทรัพย์สิน (Asset ID Missing)": 0,
                 "อื่นๆ": 0
-            },
-            "asset_type_breakdown": {}
+            }
         }
 
         total_initial_all = 0
         total_active_all = 0
         matched_active_all = 0
         excluded_all = 0
+        user_edited_all = 0
 
         for cat_key, cat_name in [("hw", "Hardware"), ("sw", "Software"), ("ups", "UPS & Monitor")]:
             recs = self.records.get(cat_key, [])
+            c_state = self.category_states.get(cat_key, "empty")
             cat_initial_total = len(recs)
             cat_active_total = 0
             cat_matched = 0
             cat_excluded = 0
+            cat_user_edited = 0
 
-            for r in recs:
-                self.compare_single_record(r)
-                if r.get("is_excluded"):
-                    cat_excluded += 1
-                    ex_reason = r.get("exclude_reason") or r.get("mismatch_type") or "อื่นๆ"
-                    if ex_reason in summary["excluded_breakdown"]:
-                        summary["excluded_breakdown"][ex_reason] += 1
+            if c_state == "compared":
+                for r in recs:
+                    if r.get("user_edited_cols"):
+                        cat_user_edited += 1
+
+                    if r.get("is_excluded"):
+                        cat_excluded += 1
+                        ex_reason = r.get("exclude_reason") or r.get("mismatch_type") or "อื่นๆ"
+                        if ex_reason in summary["excluded_breakdown"]:
+                            summary["excluded_breakdown"][ex_reason] += 1
+                        else:
+                            summary["excluded_breakdown"]["อื่นๆ"] += 1
+                        continue
+
+                    cat_active_total += 1
+                    if r.get("is_match"):
+                        cat_matched += 1
                     else:
-                        summary["excluded_breakdown"]["อื่นๆ"] += 1
-                    continue
-
-                cat_active_total += 1
-                if r["is_match"]:
-                    cat_matched += 1
-                else:
-                    m_type = r["mismatch_type"]
-                    if m_type in summary["mismatch_breakdown"]:
-                        summary["mismatch_breakdown"][m_type] += 1
-                    else:
-                        summary["mismatch_breakdown"]["อื่นๆ"] += 1
-
-                    atype = r.get("it_asset_type") or "Unknown"
-                    summary["asset_type_breakdown"][atype] = summary["asset_type_breakdown"].get(atype, 0) + 1
+                        m_type = r.get("mismatch_type", "อื่นๆ")
+                        if m_type in summary["mismatch_breakdown"]:
+                            summary["mismatch_breakdown"][m_type] += 1
+                        else:
+                            summary["mismatch_breakdown"]["อื่นๆ"] += 1
 
             cat_mismatched = cat_active_total - cat_matched
             cat_rate = round((cat_matched / cat_active_total * 100), 1) if cat_active_total > 0 else 0.0
 
             summary["by_category"][cat_key] = {
                 "name": cat_name,
+                "state": c_state,
                 "initial_total": cat_initial_total,
                 "total": cat_active_total,
                 "matched": cat_matched,
                 "mismatched": cat_mismatched,
                 "excluded": cat_excluded,
-                "match_rate": cat_rate
+                "user_edited": cat_user_edited,
+                "match_rate": cat_rate,
+                "verified_100_percent": (cat_active_total > 0 and cat_mismatched == 0 and cat_rate == 100.0)
             }
 
-            total_initial_all += cat_initial_total
-            total_active_all += cat_active_total
-            matched_active_all += cat_matched
-            excluded_all += cat_excluded
+            if c_state == "compared":
+                total_initial_all += cat_initial_total
+                total_active_all += cat_active_total
+                matched_active_all += cat_matched
+                excluded_all += cat_excluded
+                user_edited_all += cat_user_edited
 
         mismatched_active_all = total_active_all - matched_active_all
         overall_rate = round((matched_active_all / total_active_all * 100), 1) if total_active_all > 0 else 0.0
@@ -520,6 +498,7 @@ class InventoryComparator:
         summary["overall"]["matched_records"] = matched_active_all
         summary["overall"]["mismatched_records"] = mismatched_active_all
         summary["overall"]["excluded_records"] = excluded_all
+        summary["overall"]["user_edited_records"] = user_edited_all
         summary["overall"]["match_rate"] = overall_rate
         summary["overall"]["verified_100_percent"] = is_verified_100
         summary["overall"]["verification_passes"] = 3 if is_verified_100 else 0
@@ -527,62 +506,137 @@ class InventoryComparator:
         self.summary = summary
         return summary
 
-    def update_record(self, uid: str, updated_fields: Dict[str, Any], user: str = "IT Staff") -> Optional[Dict[str, Any]]:
-        """Update fields of a record, log changelog, and recompare."""
+    def recompare(self) -> Dict[str, Any]:
+        """Re-run comparison across all categories that are in 'compared' state."""
+        for cat in ["hw", "sw", "ups"]:
+            if self.category_states.get(cat) == "compared":
+                for r in self.records.get(cat, []):
+                    self.evaluate_single_record(r)
+        return self.recompute_overall_summary()
+
+    def update_cell(self, uid: str, column: str, new_value: Any, user: str = "IT Staff") -> Optional[Dict[str, Any]]:
+        """
+        Update a single cell in a record:
+        - Updates rec['cells'][column]
+        - Marks column in rec['user_edited_cols']
+        - If category is compared, re-evaluates row (auto-reinstates excluded if valid ERP asset)
+        - Records undo action
+        """
         cat = uid.split("_")[0]
-        if cat not in self.records:
-            return None
-
-        target_rec = None
-        for r in self.records[cat]:
-            if r["uid"] == uid:
-                target_rec = r
-                break
-
+        recs = self.records.get(cat, [])
+        target_rec = next((r for r in recs if r["uid"] == uid), None)
         if not target_rec:
             return None
 
-        changes = {}
-        for k, new_v in updated_fields.items():
-            if k in target_rec:
-                old_v = target_rec[k]
-                if str(old_v) != str(new_v):
-                    target_rec[k] = new_v
-                    changes[k] = {"old": old_v, "new": new_v}
+        old_val = target_rec["cells"].get(column, "")
+        clean_new = clean_val(new_value)
 
-        if changes:
-            timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
-            self.changelog.append({
-                "uid": uid,
-                "asset_id": target_rec["asset_id"],
-                "category": cat,
-                "user": user,
-                "timestamp": timestamp,
-                "changes": changes
-            })
-            self.push_undo_action({
-                "id": str(uuid.uuid4())[:8],
-                "type": "single_edit",
-                "description": f"แก้ไขข้อมูล {target_rec.get('asset_id')}",
-                "timestamp": timestamp,
-                "uid": uid,
-                "changes": changes,
-                "user": user
-            })
-            # Recompare single record and recalculate summary
-            self.recompare()
-            self.autosave()
+        if str(old_val) == clean_new:
+            return target_rec # No change
 
+        old_user_edited = copy.deepcopy(target_rec["user_edited_cols"])
+        old_is_excluded = target_rec.get("is_excluded")
+        old_manual_exclude = target_rec.get("manual_exclude")
+        old_match = target_rec.get("is_match")
+        old_mtype = target_rec.get("mismatch_type")
+
+        target_rec["cells"][column] = clean_new
+        if column not in target_rec["user_edited_cols"]:
+            target_rec["user_edited_cols"].append(column)
+
+        # Check if asset_id was edited and now matches ERP
+        cmap = COLUMN_MAP.get(cat, {})
+        if column == cmap.get("asset_id") and target_rec.get("manual_exclude") is None:
+            clean_aid = clean_asset_id(clean_new)
+            ax = self.master_dict.get(clean_aid)
+            if ax and not ax.get("is_scrapped"):
+                target_rec["is_excluded"] = False
+                target_rec["exclude_reason"] = ""
+
+        if self.category_states.get(cat) == "compared":
+            self.evaluate_single_record(target_rec)
+
+        timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+        action = {
+            "id": str(uuid.uuid4())[:8],
+            "type": "cell_edit",
+            "description": f"แก้ไข {cat.upper()} แถว {target_rec['row_index']+1} คอลัมน์ '{column}': {old_val} -> {clean_new}",
+            "timestamp": timestamp,
+            "uid": uid,
+            "category": cat,
+            "column": column,
+            "old_value": old_val,
+            "new_value": clean_new,
+            "old_user_edited": old_user_edited,
+            "old_manual_exclude": old_manual_exclude,
+            "old_is_excluded": old_is_excluded,
+            "user": user
+        }
+        self.push_undo_action(action)
+
+        self.changelog.append({
+            "uid": uid,
+            "category": cat,
+            "column": column,
+            "old": old_val,
+            "new": clean_new,
+            "timestamp": timestamp,
+            "user": user
+        })
+
+        self.recompute_overall_summary()
+        self.autosave()
+        return target_rec
+
+    def set_row_exclusion(self, uid: str, exclude: bool, user: str = "IT Staff") -> Optional[Dict[str, Any]]:
+        """Manually move row between active (Tab 3) and excluded (Tab 4)."""
+        cat = uid.split("_")[0]
+        recs = self.records.get(cat, [])
+        target_rec = next((r for r in recs if r["uid"] == uid), None)
+        if not target_rec:
+            return None
+
+        old_manual = target_rec.get("manual_exclude")
+        old_is_excl = target_rec.get("is_excluded")
+
+        target_rec["manual_exclude"] = exclude
+        if exclude:
+            target_rec["is_excluded"] = True
+            target_rec["exclude_reason"] = "ผู้ใช้กำหนดให้ตัดออกเอง"
+            target_rec["is_match"] = False
+            target_rec["mismatch_type"] = "ตัดออกโดยผู้ใช้"
+        else:
+            target_rec["is_excluded"] = False
+            target_rec["exclude_reason"] = ""
+            if self.category_states.get(cat) == "compared":
+                self.evaluate_single_record(target_rec)
+
+        timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+        action = {
+            "id": str(uuid.uuid4())[:8],
+            "type": "row_exclusion",
+            "description": f"{'ย้ายไปตัดออก' if exclude else 'คืนกลับเป็นใช้งาน'} {cat.upper()} แถว {target_rec['row_index']+1}",
+            "timestamp": timestamp,
+            "uid": uid,
+            "category": cat,
+            "old_manual_exclude": old_manual,
+            "new_manual_exclude": exclude,
+            "old_is_excluded": old_is_excl,
+            "user": user
+        }
+        self.push_undo_action(action)
+        self.recompute_overall_summary()
+        self.autosave()
         return target_rec
 
     def batch_quick_fix(self, category: str = "all", user: str = "IT Staff") -> Dict[str, Any]:
         """
-        Full 100% Reconciliation & 3-Pass Verification:
-        - Pass 1: Sync all active ERP records (including blank ERP fields so IT matches ERP 100%)
-                  and separate unmatchable records (Scrapped in ERP, Missing in ERP, Missing Asset ID)
-                  into the Excluded tab (`is_excluded = True`).
-        - Pass 2 & 3: Independently re-verify every single active record against `master_dict` 3 times
-                      to guarantee 100.0% match accuracy.
+        Auto-Fix with User-Edit Precedence:
+        - Syncs active ERP records with ERP AX values
+        - SKIPS any column that is in rec['user_edited_cols']
+        - SKIPS rows where manual_exclude is explicitly set
+        - Separates unmatchable records into Tab 4
+        - Verifies 3 passes
         """
         categories = [category] if category and category != "all" else ["hw", "sw", "ups"]
         updated_count = 0
@@ -590,179 +644,114 @@ class InventoryComparator:
         timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
         batch_items = []
 
-        # Pass 1: Sync active records & classify excluded records
         for cat in categories:
+            cmap = COLUMN_MAP.get(cat, {})
+            emp_id_col = cmap.get("emp_id")
+            emp_name_col = cmap.get("emp_name")
+            dept_col = cmap.get("dept")
+
             for r in self.records.get(cat, []):
-                # Ensure original baseline is captured before modifying
-                self.compare_single_record(r)
+                self.evaluate_single_record(r)
+                aid, emp_id, emp_name, dept, sn = self._get_key_fields(cat, r["cells"])
+                ax = self.master_dict.get(aid) if aid else None
 
-                asset_id = r.get("asset_id", "")
-                ax = self.master_dict.get(asset_id) if asset_id else None
                 changes = {}
+                old_cells = copy.deepcopy(r["cells"])
+                old_user_edited = copy.deepcopy(r["user_edited_cols"])
+                old_is_excl = r.get("is_excluded")
 
-                # Check if record should be excluded (Missing Asset ID, Missing in ERP, or Scrapped in ERP)
-                if not asset_id or not ax or ax.get("is_scrapped"):
+                if r.get("manual_exclude") is True:
+                    continue # User manually excluded this row
+
+                # Check unmatchable
+                if not aid or not ax or ax.get("is_scrapped"):
                     reason = (
-                        "ไม่มีรหัสทรัพย์สิน (Asset ID Missing)" if not asset_id
+                        "ไม่มีรหัสทรัพย์สิน (Asset ID Missing)" if not aid
                         else ("ไม่พบในระบบ ERP (มีเฉพาะใน IT)" if not ax else "ตัดจำหน่ายใน ERP แต่ IT ยังมีใช้งาน")
                     )
                     if not r.get("is_excluded"):
-                        changes["is_excluded"] = {"old": r.get("is_excluded", False), "new": True}
                         r["is_excluded"] = True
-                    if r.get("exclude_reason", "") != reason:
-                        changes["exclude_reason"] = {"old": r.get("exclude_reason", ""), "new": reason}
                         r["exclude_reason"] = reason
-                    if changes:
                         excluded_count += 1
+                        changes["is_excluded"] = {"old": False, "new": True}
                 else:
-                    # Active record in ERP -> ensure not excluded and sync 100% with ERP
-                    if r.get("is_excluded"):
-                        changes["is_excluded"] = {"old": True, "new": False}
+                    if r.get("is_excluded") and r.get("manual_exclude") is None:
                         r["is_excluded"] = False
-                        changes["exclude_reason"] = {"old": r.get("exclude_reason", ""), "new": ""}
                         r["exclude_reason"] = ""
+                        changes["is_excluded"] = {"old": True, "new": False}
 
                     ax_emp_id = clean_emp_id(ax.get("ax_emp_id", ""))
                     ax_emp_name = clean_val(ax.get("ax_emp_name", ""))
                     ax_dept = clean_val(ax.get("ax_dept", ""))
 
-                    # Sync Employee ID (including when ERP is empty so IT matches ERP 100%)
-                    if str(r.get("it_emp_id", "")).strip() != ax_emp_id:
-                        changes["it_emp_id"] = {"old": r.get("it_emp_id", ""), "new": ax_emp_id}
-                        r["it_emp_id"] = ax_emp_id
+                    # Sync Employee ID (skip if user edited)
+                    if emp_id_col and emp_id_col not in r["user_edited_cols"]:
+                        if str(r["cells"].get(emp_id_col, "")).strip() != ax_emp_id:
+                            changes[emp_id_col] = {"old": r["cells"].get(emp_id_col, ""), "new": ax_emp_id}
+                            r["cells"][emp_id_col] = ax_emp_id
 
-                    # Sync Employee Name
-                    if ax_emp_name and str(r.get("it_emp_name", "")).strip() != ax_emp_name:
-                        changes["it_emp_name"] = {"old": r.get("it_emp_name", ""), "new": ax_emp_name}
-                        r["it_emp_name"] = ax_emp_name
-                    elif not ax_emp_id and not ax_emp_name and str(r.get("it_emp_name", "")).strip() != "":
-                        changes["it_emp_name"] = {"old": r.get("it_emp_name", ""), "new": ""}
-                        r["it_emp_name"] = ""
+                    # Sync Employee Name (skip if user edited)
+                    if emp_name_col and emp_name_col not in r["user_edited_cols"]:
+                        if ax_emp_name and str(r["cells"].get(emp_name_col, "")).strip() != ax_emp_name:
+                            changes[emp_name_col] = {"old": r["cells"].get(emp_name_col, ""), "new": ax_emp_name}
+                            r["cells"][emp_name_col] = ax_emp_name
+                        elif not ax_emp_id and not ax_emp_name and str(r["cells"].get(emp_name_col, "")).strip() != "":
+                            changes[emp_name_col] = {"old": r["cells"].get(emp_name_col, ""), "new": ""}
+                            r["cells"][emp_name_col] = ""
 
-                    # Sync Department (if department does not match ERP or if ERP has explicit dept name)
-                    if ax_dept and str(r.get("it_dept", "")).strip() != ax_dept:
-                        changes["it_dept"] = {"old": r.get("it_dept", ""), "new": ax_dept}
-                        r["it_dept"] = ax_dept
-                    elif not ax_dept and not is_dept_match(r.get("it_dept", ""), ax_dept, ax.get("ax_loc_code", "")):
-                        changes["it_dept"] = {"old": r.get("it_dept", ""), "new": ""}
-                        r["it_dept"] = ""
+                    # Sync Dept (skip if user edited)
+                    if dept_col and dept_col not in r["user_edited_cols"]:
+                        if ax_dept and str(r["cells"].get(dept_col, "")).strip() != ax_dept:
+                            changes[dept_col] = {"old": r["cells"].get(dept_col, ""), "new": ax_dept}
+                            r["cells"][dept_col] = ax_dept
+                        elif not ax_dept and not is_dept_match(r["cells"].get(dept_col, ""), ax_dept, ax.get("ax_loc_code", "")):
+                            changes[dept_col] = {"old": r["cells"].get(dept_col, ""), "new": ""}
+                            r["cells"][dept_col] = ""
 
-                    if changes:
+                    if any(k != "is_excluded" for k in changes.keys()):
                         updated_count += 1
 
                 if changes:
                     batch_items.append({
-                        "uid": r.get("uid"),
-                        "asset_id": r.get("asset_id"),
+                        "uid": r["uid"],
                         "category": cat,
+                        "old_cells": old_cells,
+                        "new_cells": copy.deepcopy(r["cells"]),
+                        "old_is_excluded": old_is_excl,
+                        "new_is_excluded": r.get("is_excluded"),
                         "changes": changes
                     })
-                    self.changelog.append({
-                        "uid": r.get("uid"),
-                        "asset_id": r.get("asset_id"),
-                        "category": cat,
-                        "user": user,
-                        "timestamp": timestamp,
-                        "changes": changes,
-                        "type": "batch_auto_fix"
-                    })
 
-        # Multi-Pass Independent Verification (3 Passes)
-        verification_passes = 3
-        for _pass_idx in range(verification_passes):
-            for cat in categories:
+            # Verification passes (3 passes)
+            for _vp in range(3):
                 for r in self.records.get(cat, []):
-                    self.compare_single_record(r)
-                    if not r.get("is_excluded") and not r.get("is_match"):
-                        # Force exact alignment if any edge case remained
-                        ax = r.get("ax_data", {})
-                        if ax and ax.get("asset_id") and not ax.get("is_scrapped"):
-                            r["it_emp_id"] = clean_emp_id(ax.get("ax_emp_id", ""))
-                            r["it_emp_name"] = clean_val(ax.get("ax_emp_name", ""))
-                            r["it_dept"] = clean_val(ax.get("ax_dept", ""))
-                            self.compare_single_record(r)
-                        else:
-                            r["is_excluded"] = True
-                            r["exclude_reason"] = r.get("mismatch_type", "ไม่พบในระบบ ERP")
+                    self.evaluate_single_record(r)
+
+            self.category_states[cat] = "compared"
 
         if batch_items:
             self.push_undo_action({
                 "id": str(uuid.uuid4())[:8],
                 "type": "batch_quick_fix",
-                "description": f"ซิงค์ตรง ERP 100% ({updated_count} รายการ) และคัดแยก ({excluded_count} รายการ)",
+                "description": f"Auto-Fix {category.upper()} ({updated_count} รายการ, ตัดออก {excluded_count} รายการ)",
                 "timestamp": timestamp,
                 "items": batch_items,
                 "user": user
             })
 
-        self.recompare()
+        self.recompute_overall_summary()
         self.autosave()
 
         return {
             "success": True,
             "updated_count": updated_count,
             "excluded_count": excluded_count,
-            "verification_passes": verification_passes,
+            "verification_passes": 3,
             "verified_100_percent": self.summary.get("overall", {}).get("verified_100_percent", False),
-            "new_match_rate": self.summary.get("overall", {}).get("match_rate", 0) if self.summary else 0,
-            "overall": self.summary.get("overall", {}) if self.summary else {}
+            "new_match_rate": self.summary.get("overall", {}).get("match_rate", 0),
+            "overall": self.summary.get("overall", {})
         }
 
-
-    def get_records(self, category: Optional[str] = None, mismatch_only: bool = True, search: str = "", limit: int = 50, offset: int = 0, include_excluded: bool = False, only_excluded: bool = False) -> Tuple[List[Dict[str, Any]], int]:
-        """Fetch records with filtering and pagination."""
-        all_recs = []
-        categories = [category] if category and category != "all" else ["hw", "sw", "ups"]
-
-        for c in categories:
-            all_recs.extend(self.records.get(c, []))
-
-        if only_excluded:
-            filtered = [
-                r for r in all_recs
-                if r.get("is_excluded") or (
-                    not any(x.get("is_excluded") for x in all_recs) and (
-                        "ตัดจำหน่าย" in r.get("mismatch_type", "") or
-                        "ไม่พบ" in r.get("mismatch_type", "") or
-                        "ไม่มีรหัส" in r.get("mismatch_type", "")
-                    )
-                )
-            ]
-        else:
-            if not include_excluded:
-                all_recs = [r for r in all_recs if not r.get("is_excluded")]
-            if mismatch_only:
-                filtered = [r for r in all_recs if not r["is_match"]]
-            else:
-                filtered = all_recs
-
-        # Search filter
-        if search:
-            q = search.lower().strip()
-            def matches_query(r):
-                fields = [
-                    r.get("asset_id", ""),
-                    r.get("it_record_id", ""),
-                    r.get("it_emp_id", ""),
-                    r.get("it_emp_name", ""),
-                    r.get("it_dept", ""),
-                    r.get("it_asset_name", ""),
-                    r.get("mismatch_type", ""),
-                    r.get("exclude_reason", ""),
-                    r.get("ax_data", {}).get("ax_emp_name", ""),
-                    r.get("ax_data", {}).get("ax_emp_id", ""),
-                    r.get("ax_data", {}).get("ax_dept", "")
-                ]
-                return any(q in str(f).lower() for f in fields)
-            filtered = [r for r in filtered if matches_query(r)]
-
-        total_count = len(filtered)
-        paginated = filtered[offset: offset + limit]
-        return paginated, total_count
-
-    # =========================================================================
-    # Google Workspace-Style Undo, Redo, Version History & AutoSave
-    # =========================================================================
     def push_undo_action(self, action: Dict[str, Any]):
         """Push an action to undo stack, cap at 50, and clear redo stack."""
         self.undo_stack.append(action)
@@ -772,89 +761,107 @@ class InventoryComparator:
         self.autosave()
 
     def undo(self) -> Dict[str, Any]:
-        """Rollback the last action like Google Workspace Ctrl+Z."""
+        """Undo last action."""
         if not self.undo_stack:
-            return {
-                "success": False,
-                "message": "ไม่มีประวัติการกระทำที่จะเลิกทำ (Undo stack is empty)",
-                "can_undo": False,
-                "can_redo": len(self.redo_stack) > 0
-            }
+            return {"success": False, "message": "ไม่มีประวัติการกระทำที่จะเลิกทำ", "can_undo": False, "can_redo": len(self.redo_stack) > 0}
 
         action = self.undo_stack.pop()
-        action_type = action.get("type")
+        atype = action.get("type")
 
-        if action_type in ("single_edit", "quick_fix"):
+        if atype == "cell_edit":
             uid = action.get("uid")
             cat = uid.split("_")[0]
             for r in self.records.get(cat, []):
                 if r["uid"] == uid:
-                    for field, change in action.get("changes", {}).items():
-                        r[field] = change.get("old")
+                    r["cells"][action["column"]] = action["old_value"]
+                    r["user_edited_cols"] = copy.deepcopy(action["old_user_edited"])
+                    r["manual_exclude"] = action.get("old_manual_exclude")
+                    r["is_excluded"] = action.get("old_is_excluded", False)
+                    if self.category_states.get(cat) == "compared":
+                        self.evaluate_single_record(r)
                     break
-        elif action_type == "batch_quick_fix":
+        elif atype == "row_exclusion":
+            uid = action.get("uid")
+            cat = uid.split("_")[0]
+            for r in self.records.get(cat, []):
+                if r["uid"] == uid:
+                    r["manual_exclude"] = action.get("old_manual_exclude")
+                    r["is_excluded"] = action.get("old_is_excluded", False)
+                    if self.category_states.get(cat) == "compared":
+                        self.evaluate_single_record(r)
+                    break
+        elif atype == "batch_quick_fix":
             for item in action.get("items", []):
                 uid = item.get("uid")
                 cat = uid.split("_")[0]
                 for r in self.records.get(cat, []):
                     if r["uid"] == uid:
-                        for field, change in item.get("changes", {}).items():
-                            r[field] = change.get("old")
+                        r["cells"] = copy.deepcopy(item["old_cells"])
+                        r["is_excluded"] = item["old_is_excluded"]
+                        if self.category_states.get(cat) == "compared":
+                            self.evaluate_single_record(r)
                         break
 
-        # Push to redo stack
         self.redo_stack.append(action)
-        self.recompare()
+        self.recompute_overall_summary()
         self.autosave()
 
         return {
             "success": True,
             "message": f"เลิกทำสำเร็จ: {action.get('description', '')}",
-            "action": action,
             "can_undo": len(self.undo_stack) > 0,
             "can_redo": True,
             "summary": self.summary
         }
 
     def redo(self) -> Dict[str, Any]:
-        """Re-apply the undone action (Ctrl+Y)."""
+        """Redo undone action."""
         if not self.redo_stack:
-            return {
-                "success": False,
-                "message": "ไม่มีประวัติที่จะทำซ้ำ (Redo stack is empty)",
-                "can_undo": len(self.undo_stack) > 0,
-                "can_redo": False
-            }
+            return {"success": False, "message": "ไม่มีประวัติที่จะทำซ้ำ", "can_undo": len(self.undo_stack) > 0, "can_redo": False}
 
         action = self.redo_stack.pop()
-        action_type = action.get("type")
+        atype = action.get("type")
 
-        if action_type in ("single_edit", "quick_fix"):
+        if atype == "cell_edit":
             uid = action.get("uid")
             cat = uid.split("_")[0]
             for r in self.records.get(cat, []):
                 if r["uid"] == uid:
-                    for field, change in action.get("changes", {}).items():
-                        r[field] = change.get("new")
+                    r["cells"][action["column"]] = action["new_value"]
+                    if action["column"] not in r["user_edited_cols"]:
+                        r["user_edited_cols"].append(action["column"])
+                    if self.category_states.get(cat) == "compared":
+                        self.evaluate_single_record(r)
                     break
-        elif action_type == "batch_quick_fix":
+        elif atype == "row_exclusion":
+            uid = action.get("uid")
+            cat = uid.split("_")[0]
+            for r in self.records.get(cat, []):
+                if r["uid"] == uid:
+                    r["manual_exclude"] = action.get("new_manual_exclude")
+                    r["is_excluded"] = bool(action.get("new_manual_exclude"))
+                    if self.category_states.get(cat) == "compared":
+                        self.evaluate_single_record(r)
+                    break
+        elif atype == "batch_quick_fix":
             for item in action.get("items", []):
                 uid = item.get("uid")
                 cat = uid.split("_")[0]
                 for r in self.records.get(cat, []):
                     if r["uid"] == uid:
-                        for field, change in item.get("changes", {}).items():
-                            r[field] = change.get("new")
+                        r["cells"] = copy.deepcopy(item["new_cells"])
+                        r["is_excluded"] = item["new_is_excluded"]
+                        if self.category_states.get(cat) == "compared":
+                            self.evaluate_single_record(r)
                         break
 
         self.undo_stack.append(action)
-        self.recompare()
+        self.recompute_overall_summary()
         self.autosave()
 
         return {
             "success": True,
             "message": f"ทำซ้ำสำเร็จ: {action.get('description', '')}",
-            "action": action,
             "can_undo": True,
             "can_redo": len(self.redo_stack) > 0,
             "summary": self.summary
@@ -870,8 +877,7 @@ class InventoryComparator:
                 "type": act.get("type"),
                 "description": act.get("description"),
                 "timestamp": act.get("timestamp"),
-                "user": act.get("user", "IT Officer"),
-                "count": len(act.get("items", [])) if act.get("type") == "batch_quick_fix" else 1
+                "user": act.get("user", "IT Officer")
             })
         return list(reversed(history))
 
@@ -893,11 +899,12 @@ class InventoryComparator:
         }
 
     def autosave(self, path: Optional[str] = None):
-        """Persist current session state to disk atomically."""
+        """Persist session state to disk atomically."""
         if path:
             self.autosave_path = path
         if not self.autosave_path:
             return
+
         try:
             filenames = {
                 "master": getattr(self, "master_filename", None),
@@ -906,6 +913,9 @@ class InventoryComparator:
                 "ups": getattr(self, "ups_filename", None)
             }
             data = {
+                "version": "2.0",
+                "category_states": self.category_states,
+                "columns": self.columns,
                 "records": self.records,
                 "master_dict": self.master_dict,
                 "summary": self.summary,
@@ -932,13 +942,20 @@ class InventoryComparator:
                 pass
 
     def load_autosave(self, path: str) -> bool:
-        """Restore session from autosave file if exists."""
+        """Restore session from autosave file if exists and is valid 2.0 structure."""
         self.autosave_path = path
         if not os.path.exists(path):
             return False
         try:
             with open(path, "r", encoding="utf-8") as f:
                 data = json.load(f)
+
+            # Check version. If older legacy format without 'version': '2.0', discard
+            if data.get("version") != "2.0":
+                return False
+
+            self.category_states = data.get("category_states", {"hw": "empty", "sw": "empty", "ups": "empty"})
+            self.columns = data.get("columns", {"hw": [], "sw": [], "ups": []})
             self.records = data.get("records", {"hw": [], "sw": [], "ups": []})
             self.master_dict = data.get("master_dict", {})
             self.summary = data.get("summary", {})
@@ -962,30 +979,8 @@ class InventoryComparator:
                         except Exception:
                             pass
 
-            # Backfill original baseline fields from raw DataFrames if loading a legacy autosave
-            for cat, df_attr, emp_name_col, sn_col in [
-                ("hw", "hw_df", "ผู้ใช้งาน/ดูแล", "S/N"),
-                ("sw", "sw_df", "ผู้ดูแล", "Key License"),
-                ("ups", "ups_df", "ผู้ใช้งาน/ดูแล", "S/N")
-            ]:
-                df_raw = getattr(self, df_attr, None)
-                for r in self.records.get(cat, []):
-                    idx = r.get("row_index")
-                    if "orig_it_emp_id" not in r and df_raw is not None and idx is not None and idx in df_raw.index:
-                        row = df_raw.loc[idx]
-                        r["orig_asset_id"] = clean_asset_id(row.get("เลขที่ทรัพย์สิน"))
-                        r["orig_it_emp_id"] = clean_emp_id(row.get("รหัสพนักงาน"))
-                        r["orig_it_emp_name"] = clean_val(row.get(emp_name_col))
-                        r["orig_it_dept"] = clean_val(row.get("สถานที่เก็บ"))
-                        r["orig_it_sn"] = clean_val(row.get(sn_col))
-                    if "is_excluded" not in r:
-                        r["is_excluded"] = False
-                        r["exclude_reason"] = ""
-
-            if self.master_dict or any(len(v) > 0 for v in self.records.values()):
-                self.recompare()
-                return True
-            return False
+            self.recompute_overall_summary()
+            return True
         except Exception as e:
             try:
                 from logger_util import get_system_logger
@@ -995,12 +990,14 @@ class InventoryComparator:
             return False
 
     def reset_session(self) -> bool:
-        """Clear all in-memory data, wipe autosave file, and clean sources directory."""
+        """Clear session back to empty state."""
         self.master_df = None
         self.master_dict = {}
         self.hw_df = None
         self.sw_df = None
         self.ups_df = None
+        self.columns = {"hw": [], "sw": [], "ups": []}
+        self.category_states = {"hw": "empty", "sw": "empty", "ups": "empty"}
         self.records = {"hw": [], "sw": [], "ups": []}
         self.summary = {}
         self.changelog = []
@@ -1028,4 +1025,3 @@ class InventoryComparator:
                 except Exception:
                     pass
         return True
-

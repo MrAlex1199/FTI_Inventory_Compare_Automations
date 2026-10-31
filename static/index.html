@@ -14,514 +14,420 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
-    <!-- Top Enterprise Header -->
-    <header class="app-header">
-        <div class="header-inner">
-            <div class="brand-group">
+    <div class="app-layout">
+        <!-- ========================================================= -->
+        <!-- App Sidebar (Left Navigation)                             -->
+        <!-- ========================================================= -->
+        <aside class="app-sidebar">
+            <div class="sidebar-header">
                 <div class="brand-badge">
                     <i class="fa-solid fa-file-excel"></i>
                 </div>
-                <div>
-                    <h1 class="brand-title">FTI IT Asset Inventory Compare System</h1>
-                    <p class="brand-sub">ระบบเปรียบเทียบข้อมูลทรัพย์สินไอที ERP (AX) vs IT Inventory อัตโนมัติ</p>
+                <div class="brand-meta">
+                    <h1 class="brand-title">FTI Compare</h1>
+                    <span class="brand-version">v2.0 Pro Max</span>
                 </div>
             </div>
-            <div class="header-actions">
-                <!-- Cluster 1: Session & History Toolbar -->
-                <div class="toolbar-cluster">
-                    <!-- Auto-Save Status Badge -->
-                    <div id="autosave-status" class="autosave-badge" title="บันทึกข้อมูลอัตโนมัติแล้ว">
+
+            <nav class="sidebar-nav">
+                <div class="nav-section-label">เมนูหลัก (Workspaces)</div>
+                <button class="nav-item active" data-view="files">
+                    <i class="fa-solid fa-folder-open nav-icon"></i>
+                    <span class="nav-text">ไฟล์ข้อมูล</span>
+                    <span class="nav-badge" id="badge-nav-files">4 ไฟล์</span>
+                </button>
+
+                <div class="nav-section-label">หมวดหมู่ทรัพย์สิน</div>
+                <button class="nav-item" data-view="hw">
+                    <i class="fa-solid fa-desktop nav-icon text-blue"></i>
+                    <span class="nav-text">Hardware</span>
+                    <span class="nav-status-dot state-empty" id="dot-nav-hw" title="สถานะ"></span>
+                </button>
+                <button class="nav-item" data-view="sw">
+                    <i class="fa-solid fa-code nav-icon text-cyan"></i>
+                    <span class="nav-text">Software</span>
+                    <span class="nav-status-dot state-empty" id="dot-nav-sw" title="สถานะ"></span>
+                </button>
+                <button class="nav-item" data-view="ups">
+                    <i class="fa-solid fa-car-battery nav-icon text-amber"></i>
+                    <span class="nav-text">UPS & Monitor</span>
+                    <span class="nav-status-dot state-empty" id="dot-nav-ups" title="สถานะ"></span>
+                </button>
+
+                <div class="nav-section-label">รายงานและส่งออก</div>
+                <button class="nav-item" data-view="summary">
+                    <i class="fa-solid fa-chart-pie nav-icon text-green"></i>
+                    <span class="nav-text">สรุป & ดาวน์โหลด</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="sidebar-footer-btn" id="btn-open-settings" title="ตั้งค่าระบบ">
+                    <i class="fa-solid fa-gear"></i> <span>ตั้งค่า</span>
+                </button>
+                <button class="sidebar-footer-btn btn-exit-power" id="btn-exit-app" title="ปิดออกจากโปรแกรม">
+                    <i class="fa-solid fa-power-off"></i>
+                </button>
+            </div>
+        </aside>
+
+        <!-- ========================================================= -->
+        <!-- Main Content Area                                         -->
+        <!-- ========================================================= -->
+        <div class="main-wrapper">
+            <!-- Top App Bar -->
+            <header class="app-topbar">
+                <div class="topbar-left">
+                    <h2 class="view-title" id="current-view-title">ไฟล์ข้อมูลที่ใช้งาน (Data Sources)</h2>
+                    <span class="view-desc" id="current-view-desc">ตรวจสอบไฟล์ ERP Master และไฟล์ IT Inventory</span>
+                </div>
+                <div class="topbar-right">
+                    <!-- Autosave Indicator -->
+                    <div id="autosave-status" class="autosave-pill" title="บันทึกข้อมูลอัตโนมัติแล้ว">
                         <i class="fa-solid fa-cloud-arrow-up"></i> <span id="autosave-text">บันทึกอัตโนมัติ</span>
                     </div>
 
-                    <!-- Undo & Redo & Version History -->
-                    <div class="btn-group-tools">
-                        <button id="btn-undo" class="btn btn-icon-tool" title="เลิกทำ (Undo - Ctrl+Z)" disabled>
+                    <!-- Undo / Redo & History -->
+                    <div class="action-btn-group">
+                        <button id="btn-undo" class="btn-tool" title="เลิกทำ (Ctrl+Z)" disabled>
                             <i class="fa-solid fa-rotate-left"></i>
                         </button>
-                        <button id="btn-redo" class="btn btn-icon-tool" title="ทำซ้ำ (Redo - Ctrl+Y)" disabled>
+                        <button id="btn-redo" class="btn-tool" title="ทำซ้ำ (Ctrl+Y)" disabled>
                             <i class="fa-solid fa-rotate-right"></i>
                         </button>
-                        <button id="btn-history" class="btn btn-icon-tool" title="ประวัติการแก้ไข (Version History)">
+                        <button id="btn-history" class="btn-tool" title="ประวัติการแก้ไข">
                             <i class="fa-solid fa-clock-rotate-left"></i>
                         </button>
                     </div>
 
-                    <!-- New Session Button -->
-                    <button id="btn-new-session" class="btn btn-secondary btn-sm btn-session" title="ล้างข้อมูลและเริ่มเซสชันใหม่">
-                        <i class="fa-solid fa-file-circle-plus"></i> <span>เริ่มเซสชันใหม่</span>
-                    </button>
-                </div>
-
-                <div class="header-v-divider"></div>
-
-                <!-- Cluster 2: System Utilities -->
-                <div class="system-cluster">
-                    <!-- Live System Log Button -->
-                    <button id="btn-view-logs" class="btn btn-icon-theme" title="เปิดดู System Console & Live Logs">
-                        <span class="btn-label-sm">Log</span>
-                    </button>
-
-                    <!-- Theme Toggle Button -->
-                    <button id="btn-theme-toggle" class="btn btn-icon-theme" title="สลับ Dark / Light Mode">
+                    <!-- Theme Toggle -->
+                    <button id="btn-theme-toggle" class="btn-tool" title="สลับ Dark / Light Mode">
                         <i class="fa-solid fa-moon"></i>
                     </button>
-
-                    <!-- Exit App Button -->
-                    <button id="btn-exit-app" class="btn btn-icon-theme btn-exit" title="ปิดออกจากโปรแกรม">
-                        <i class="fa-solid fa-power-off"></i>
-                    </button>
                 </div>
+            </header>
 
-                <div class="header-v-divider"></div>
+            <!-- Views Container -->
+            <main class="app-content-body">
+                <!-- VIEW 1: Files Ingestion View -->
+                <div class="view-panel active" id="view-files">
+                    <div class="panel-header-banner">
+                        <div>
+                            <h3><i class="fa-solid fa-folder-open"></i> ไฟล์ข้อมูลและสถานะการเปรียบเทียบ</h3>
+                            <p>เมื่อเพิ่มไฟล์ระบบจะยังไม่เปรียบเทียบทันที ท่านสามารถเลือกกดเปรียบเทียบในแต่ละหมวดหมู่ได้อย่างอิสระ</p>
+                        </div>
+                    </div>
 
-                <!-- Cluster 3: Primary Action (Export Dropdown) -->
-                <div class="dropdown">
-                    <button id="btn-export-dropdown" class="btn btn-action-green">
-                        <i class="fa-solid fa-download"></i> ดาวน์โหลดไฟล์ผลลัพธ์ (4 แท็บ) <i class="fa-solid fa-chevron-down"></i>
-                    </button>
-                    <div class="dropdown-menu">
-                        <div class="dropdown-heading">ไฟล์ผลลัพธ์แยก 3 หมวด (ครบ 4 แท็บ: เดิม / ชี้จุดต่าง / แก้ไข 100% / ตัดออก)</div>
-                        <a href="/api/export/inventory-all" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-file-zipper text-green"></i> <strong>ดาวน์โหลดครบทั้ง 3 ไฟล์พร้อมกัน (.zip)</strong>
-                        </a>
-                        <a href="/api/export/inventory/hw" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-desktop text-blue"></i> <strong>1-it_asset_HW.xlsx</strong> (ครบ 4 แท็บ)
-                        </a>
-                        <a href="/api/export/inventory/sw" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-code text-cyan"></i> <strong>2-it_asset_SW.xlsx</strong> (ครบ 4 แท็บ)
-                        </a>
-                        <a href="/api/export/inventory/ups" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-car-battery text-amber"></i> <strong>3-it_asset_UPS_Monitor.xlsx</strong> (ครบ 4 แท็บ)
-                        </a>
-                        <div class="dropdown-sep"></div>
-                        <div class="dropdown-heading">รายงานสรุปภาพรวม (Summary Reports)</div>
-                        <a href="/api/export/report?category=all" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-file-excel text-red"></i> รายงานสรุปรวมทุกประเภท (.xlsx)
-                        </a>
-                        <a href="/api/export/report?category=hw" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-desktop text-blue"></i> รายงานสรุป Hardware (.xlsx)
-                        </a>
-                        <a href="/api/export/report?category=sw" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-code text-cyan"></i> รายงานสรุป Software (.xlsx)
-                        </a>
-                        <a href="/api/export/report?category=ups" target="_blank" class="dropdown-item">
-                            <i class="fa-solid fa-car-battery text-amber"></i> รายงานสรุป UPS & Monitor (.xlsx)
-                        </a>
+                    <div class="files-grid">
+                        <!-- Master Card -->
+                        <div class="file-card file-master" id="dropzone-master" data-filetype="master">
+                            <div class="file-card-top">
+                                <span class="tag-master"><i class="fa-solid fa-database"></i> ไฟล์หลัก ERP (Master)</span>
+                                <span class="file-badge badge-empty" id="filebadge-master">รอไฟล์</span>
+                            </div>
+                            <div class="file-title" id="filename-master">0-FTI_asset_HWSWOth.xlsx</div>
+                            <div class="file-sub" id="filemeta-master">ข้อมูลสินทรัพย์หลักจากระบบ ERP (AX)</div>
+                            <div class="drop-hint"><i class="fa-solid fa-cloud-arrow-up"></i> ลากไฟล์มาวาง หรือคลิกเพื่อเปลี่ยนไฟล์</div>
+                            <input type="file" id="file-input-master" accept=".xlsx,.xls" hidden>
+                        </div>
+
+                        <!-- HW Card -->
+                        <div class="file-card" id="dropzone-hw" data-filetype="hw">
+                            <div class="file-card-top">
+                                <span class="tag-cat tag-hw"><i class="fa-solid fa-desktop"></i> Hardware</span>
+                                <span class="file-badge badge-empty" id="filebadge-hw">รอไฟล์</span>
+                            </div>
+                            <div class="file-title" id="filename-hw">1-it_asset_HW.xlsx</div>
+                            <div class="file-sub" id="filemeta-hw">คอมพิวเตอร์ PC, Notebook และอุปกรณ์ HW</div>
+                            <div class="file-action-row">
+                                <button class="btn btn-primary btn-sm btn-nav-to-cat" data-goto="hw">
+                                    <i class="fa-solid fa-arrow-right"></i> เปิดหน้า Hardware
+                                </button>
+                            </div>
+                            <div class="drop-hint"><i class="fa-solid fa-cloud-arrow-up"></i> ลากไฟล์มาวาง หรือคลิกเพื่อเปลี่ยนไฟล์</div>
+                            <input type="file" id="file-input-hw" accept=".xlsx,.xls" hidden>
+                        </div>
+
+                        <!-- SW Card -->
+                        <div class="file-card" id="dropzone-sw" data-filetype="sw">
+                            <div class="file-card-top">
+                                <span class="tag-cat tag-sw"><i class="fa-solid fa-code"></i> Software</span>
+                                <span class="file-badge badge-empty" id="filebadge-sw">รอไฟล์</span>
+                            </div>
+                            <div class="file-title" id="filename-sw">2-it_asset_SW.xlsx</div>
+                            <div class="file-sub" id="filemeta-sw">โปรแกรมคอมพิวเตอร์และ License ลิขสิทธิ์</div>
+                            <div class="file-action-row">
+                                <button class="btn btn-primary btn-sm btn-nav-to-cat" data-goto="sw">
+                                    <i class="fa-solid fa-arrow-right"></i> เปิดหน้า Software
+                                </button>
+                            </div>
+                            <div class="drop-hint"><i class="fa-solid fa-cloud-arrow-up"></i> ลากไฟล์มาวาง หรือคลิกเพื่อเปลี่ยนไฟล์</div>
+                            <input type="file" id="file-input-sw" accept=".xlsx,.xls" hidden>
+                        </div>
+
+                        <!-- UPS Card -->
+                        <div class="file-card" id="dropzone-ups" data-filetype="ups">
+                            <div class="file-card-top">
+                                <span class="tag-cat tag-ups"><i class="fa-solid fa-car-battery"></i> UPS & Monitor</span>
+                                <span class="file-badge badge-empty" id="filebadge-ups">รอไฟล์</span>
+                            </div>
+                            <div class="file-title" id="filename-ups">3-it_asset_UPS_Monitor.xlsx</div>
+                            <div class="file-sub" id="filemeta-ups">เครื่องสำรองไฟและหน้าจอคอมพิวเตอร์</div>
+                            <div class="file-action-row">
+                                <button class="btn btn-primary btn-sm btn-nav-to-cat" data-goto="ups">
+                                    <i class="fa-solid fa-arrow-right"></i> เปิดหน้า UPS & Monitor
+                                </button>
+                            </div>
+                            <div class="drop-hint"><i class="fa-solid fa-cloud-arrow-up"></i> ลากไฟล์มาวาง หรือคลิกเพื่อเปลี่ยนไฟล์</div>
+                            <input type="file" id="file-input-ups" accept=".xlsx,.xls" hidden>
+                        </div>
                     </div>
                 </div>
-            </div>
+
+                <!-- VIEW 2: Category Workspace View (HW, SW, UPS share this template dynamically) -->
+                <div class="view-panel" id="view-category">
+                    <!-- Action Bar & Controls -->
+                    <div class="workspace-action-bar">
+                        <div class="action-bar-left">
+                            <button class="btn btn-primary btn-compare" id="btn-run-compare">
+                                <i class="fa-solid fa-play"></i> เริ่มเปรียบเทียบหมวดนี้
+                            </button>
+                            <button class="btn btn-action-green btn-autofix" id="btn-run-autofix">
+                                <i class="fa-solid fa-bolt"></i> 1-Click Auto-Fix
+                            </button>
+                            <a href="#" target="_blank" class="btn btn-secondary btn-export-cat" id="btn-export-category">
+                                <i class="fa-solid fa-download"></i> ดาวน์โหลดผลลัพธ์ (4 แท็บ)
+                            </a>
+                        </div>
+                        <div class="action-bar-right">
+                            <div class="status-indicator-badge" id="workspace-status-badge">
+                                รอการเปรียบเทียบ
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Mini KPI Dashboard for this category -->
+                    <div class="category-kpi-bar" id="category-kpi-bar" style="display: none;">
+                        <div class="kpi-mini-card">
+                            <span class="kpi-mini-label">คะแนนความตรงกัน:</span>
+                            <span class="kpi-mini-val text-green" id="cat-kpi-match-rate">--%</span>
+                        </div>
+                        <div class="kpi-mini-card">
+                            <span class="kpi-mini-label">ตรงกัน (แท็บ 3):</span>
+                            <span class="kpi-mini-val text-green" id="cat-kpi-matched">0</span>
+                        </div>
+                        <div class="kpi-mini-card">
+                            <span class="kpi-mini-label">พบจุดต่าง (Mismatch):</span>
+                            <span class="kpi-mini-val text-red" id="cat-kpi-mismatched">0</span>
+                        </div>
+                        <div class="kpi-mini-card">
+                            <span class="kpi-mini-label">ตัดออก (แท็บ 4):</span>
+                            <span class="kpi-mini-val text-amber" id="cat-kpi-excluded">0</span>
+                        </div>
+                        <div class="kpi-mini-card">
+                            <span class="kpi-mini-label">แก้ไขโดยผู้ใช้:</span>
+                            <span class="kpi-mini-val text-cyan" id="cat-kpi-user-edited">0</span>
+                        </div>
+                    </div>
+
+                    <!-- Spreadsheet Toolbar -->
+                    <div class="spreadsheet-toolbar">
+                        <div class="filter-pills-row">
+                            <button class="grid-filter-pill active" data-filter="all">ทั้งหมด</button>
+                            <button class="grid-filter-pill" data-filter="mismatch"><i class="fa-solid fa-triangle-exclamation text-red"></i> เฉพาะจุดต่าง</button>
+                            <button class="grid-filter-pill" data-filter="match"><i class="fa-solid fa-circle-check text-green"></i> ตรงกันแล้ว</button>
+                            <button class="grid-filter-pill" data-filter="excluded"><i class="fa-solid fa-filter-circle-xmark text-amber"></i> ข้อมูลที่ตัดออก</button>
+                            <button class="grid-filter-pill" data-filter="user_edited"><i class="fa-solid fa-user-pen text-cyan"></i> แก้ไขเอง</button>
+                        </div>
+                        <div class="search-box-wrap">
+                            <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                            <input type="text" id="grid-search-input" placeholder="ค้นหาทุกคอลัมน์ในตาราง...">
+                        </div>
+                    </div>
+
+                    <!-- Spreadsheet Split View (Grid + Side Panel) -->
+                    <div class="spreadsheet-container">
+                        <!-- Main Table Grid -->
+                        <div class="grid-scroll-wrap" id="grid-scroll-wrap">
+                            <table class="spreadsheet-table" id="spreadsheet-table">
+                                <thead id="spreadsheet-thead">
+                                    <!-- Dynamic Columns -->
+                                </thead>
+                                <tbody id="spreadsheet-tbody">
+                                    <!-- Dynamic Rows -->
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Side Panel: ERP AX Reference & Quick Actions -->
+                        <div class="erp-side-panel" id="erp-side-panel">
+                            <div class="side-panel-header">
+                                <div class="side-panel-title">
+                                    <i class="fa-solid fa-database"></i> ข้อมูล ERP (AX) อ้างอิง
+                                </div>
+                                <button class="side-panel-close" id="btn-close-sidepanel">✕</button>
+                            </div>
+                            <div class="side-panel-body" id="side-panel-body">
+                                <p class="side-panel-empty">คลิกเลือกแถวในตารางเพื่อดูข้อมูลเปรียบเทียบกับ ERP</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Pagination Footer -->
+                    <div class="grid-pagination-bar">
+                        <div class="pagination-info" id="grid-pagination-info">
+                            แสดง 0 - 0 จากทั้งหมด 0 รายการ
+                        </div>
+                        <div class="pagination-controls">
+                            <label for="grid-page-size">แสดงต่อหน้า:</label>
+                            <select id="grid-page-size" class="page-select">
+                                <option value="50" selected>50</option>
+                                <option value="100">100</option>
+                                <option value="250">250</option>
+                                <option value="999999">แสดงทั้งหมด</option>
+                            </select>
+                            <button class="btn-page" id="btn-grid-prev" disabled><i class="fa-solid fa-chevron-left"></i> ก่อนหน้า</button>
+                            <span class="page-current" id="grid-page-current">หน้า 1 / 1</span>
+                            <button class="btn-page" id="btn-grid-next" disabled>ถัดไป <i class="fa-solid fa-chevron-right"></i></button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VIEW 3: Summary & Download View -->
+                <div class="view-panel" id="view-summary">
+                    <div class="panel-header-banner">
+                        <div>
+                            <h3><i class="fa-solid fa-chart-pie"></i> สรุปภาพรวมและดาวน์โหลดผลลัพธ์ (4 แท็บ)</h3>
+                            <p>ดาวน์โหลดไฟล์ผลลัพธ์แยกตามหมวดหมู่ หรือดาวน์โหลดเป็น ZIP ไฟล์เดียวครบทั้ง 3 หมวด</p>
+                        </div>
+                        <div>
+                            <a href="/api/export/inventory-all" target="_blank" class="btn btn-action-green btn-lg">
+                                <i class="fa-solid fa-file-zipper"></i> ดาวน์โหลดรวมทั้ง 3 ไฟล์ (.zip)
+                            </a>
+                        </div>
+                    </div>
+
+                    <div class="summary-cards-grid">
+                        <!-- HW Summary -->
+                        <div class="summary-cat-card" id="sum-card-hw">
+                            <div class="summary-cat-header">
+                                <span class="tag-cat tag-hw"><i class="fa-solid fa-desktop"></i> Hardware</span>
+                                <span class="summary-rate" id="sum-rate-hw">--%</span>
+                            </div>
+                            <div class="summary-counts-list">
+                                <div><span>สถานะ:</span> <strong id="sum-state-hw">รอเปรียบเทียบ</strong></div>
+                                <div><span>ตรงกัน (แท็บ 3):</span> <strong class="text-green" id="sum-matched-hw">0</strong></div>
+                                <div><span>พบจุดต่าง:</span> <strong class="text-red" id="sum-mismatched-hw">0</strong></div>
+                                <div><span>ตัดออก (แท็บ 4):</span> <strong class="text-amber" id="sum-excluded-hw">0</strong></div>
+                            </div>
+                            <a href="/api/export/inventory/hw" target="_blank" class="btn btn-secondary btn-block" id="btn-sum-dl-hw">
+                                <i class="fa-solid fa-download"></i> ดาวน์โหลด 1-it_asset_HW.xlsx
+                            </a>
+                        </div>
+
+                        <!-- SW Summary -->
+                        <div class="summary-cat-card" id="sum-card-sw">
+                            <div class="summary-cat-header">
+                                <span class="tag-cat tag-sw"><i class="fa-solid fa-code"></i> Software</span>
+                                <span class="summary-rate" id="sum-rate-sw">--%</span>
+                            </div>
+                            <div class="summary-counts-list">
+                                <div><span>สถานะ:</span> <strong id="sum-state-sw">รอเปรียบเทียบ</strong></div>
+                                <div><span>ตรงกัน (แท็บ 3):</span> <strong class="text-green" id="sum-matched-sw">0</strong></div>
+                                <div><span>พบจุดต่าง:</span> <strong class="text-red" id="sum-mismatched-sw">0</strong></div>
+                                <div><span>ตัดออก (แท็บ 4):</span> <strong class="text-amber" id="sum-excluded-sw">0</strong></div>
+                            </div>
+                            <a href="/api/export/inventory/sw" target="_blank" class="btn btn-secondary btn-block" id="btn-sum-dl-sw">
+                                <i class="fa-solid fa-download"></i> ดาวน์โหลด 2-it_asset_SW.xlsx
+                            </a>
+                        </div>
+
+                        <!-- UPS Summary -->
+                        <div class="summary-cat-card" id="sum-card-ups">
+                            <div class="summary-cat-header">
+                                <span class="tag-cat tag-ups"><i class="fa-solid fa-car-battery"></i> UPS & Monitor</span>
+                                <span class="summary-rate" id="sum-rate-ups">--%</span>
+                            </div>
+                            <div class="summary-counts-list">
+                                <div><span>สถานะ:</span> <strong id="sum-state-ups">รอเปรียบเทียบ</strong></div>
+                                <div><span>ตรงกัน (แท็บ 3):</span> <strong class="text-green" id="sum-matched-ups">0</strong></div>
+                                <div><span>พบจุดต่าง:</span> <strong class="text-red" id="sum-mismatched-ups">0</strong></div>
+                                <div><span>ตัดออก (แท็บ 4):</span> <strong class="text-amber" id="sum-excluded-ups">0</strong></div>
+                            </div>
+                            <a href="/api/export/inventory/ups" target="_blank" class="btn btn-secondary btn-block" id="btn-sum-dl-ups">
+                                <i class="fa-solid fa-download"></i> ดาวน์โหลด 3-it_asset_UPS_Monitor.xlsx
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </main>
         </div>
-    </header>
+    </div>
 
-    <main class="page-body">
-        <!-- STEP 1: File Source Check & Selection (Drag-and-Drop) -->
-        <section class="step-card">
-            <div class="step-title-row">
-                <div class="step-num">1</div>
-                <div>
-                    <h2>ไฟล์ข้อมูลที่ใช้งาน (Data Sources & Drag-and-Drop)</h2>
-                    <p>ระบบตรวจพบไฟล์ตั้งต้นอัตโนมัติ หรือท่านสามารถลากไฟล์ .xlsx มาวางลงในการ์ด หรือคลิกเพื่อเลือกไฟล์ใหม่ได้ทันที</p>
-                </div>
-            </div>
-            <div class="file-cards-grid">
-                <!-- Master File Card -->
-                <div class="file-card file-master" id="dropzone-master" data-filetype="master">
-                    <div class="file-card-header">
-                        <span class="file-type-tag tag-master"><i class="fa-solid fa-database"></i> ไฟล์หลัก ERP (Master)</span>
-                        <span class="file-status ready" id="status-badge-master"><i class="fa-solid fa-circle-check"></i> พร้อมใช้งาน</span>
-                    </div>
-                    <div class="file-name" id="filename-master">0-FTI_asset_HWSWOth.xlsx</div>
-                    <div class="file-meta" id="filemeta-master">ข้อมูลสินทรัพย์หลักจากระบบ ERP (AX)</div>
-                    <div class="drop-hint">
-                        <i class="fa-solid fa-cloud-arrow-up"></i> ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์
-                    </div>
-                    <input type="file" id="file-input-master" accept=".xlsx,.xls" hidden>
-                </div>
-
-                <!-- HW File Card -->
-                <div class="file-card" id="dropzone-hw" data-filetype="hw">
-                    <div class="file-card-header">
-                        <span class="file-type-tag tag-hw"><i class="fa-solid fa-desktop"></i> Hardware</span>
-                        <span class="file-status ready" id="status-badge-hw"><i class="fa-solid fa-circle-check"></i> พร้อมใช้งาน</span>
-                    </div>
-                    <div class="file-name" id="filename-hw">1-it_asset_HW.xlsx</div>
-                    <div class="file-meta" id="filemeta-hw">คอมพิวเตอร์ PC, Notebook และอุปกรณ์ HW</div>
-                    <div class="drop-hint">
-                        <i class="fa-solid fa-cloud-arrow-up"></i> ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์
-                    </div>
-                    <input type="file" id="file-input-hw" accept=".xlsx,.xls" hidden>
-                </div>
-
-                <!-- SW File Card -->
-                <div class="file-card" id="dropzone-sw" data-filetype="sw">
-                    <div class="file-card-header">
-                        <span class="file-type-tag tag-sw"><i class="fa-solid fa-code"></i> Software</span>
-                        <span class="file-status ready" id="status-badge-sw"><i class="fa-solid fa-circle-check"></i> พร้อมใช้งาน</span>
-                    </div>
-                    <div class="file-name" id="filename-sw">2-it_asset_SW.xlsx</div>
-                    <div class="file-meta" id="filemeta-sw">โปรแกรมคอมพิวเตอร์และ License ลิขสิทธิ์</div>
-                    <div class="drop-hint">
-                        <i class="fa-solid fa-cloud-arrow-up"></i> ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์
-                    </div>
-                    <input type="file" id="file-input-sw" accept=".xlsx,.xls" hidden>
-                </div>
-
-                <!-- UPS File Card -->
-                <div class="file-card" id="dropzone-ups" data-filetype="ups">
-                    <div class="file-card-header">
-                        <span class="file-type-tag tag-ups"><i class="fa-solid fa-car-battery"></i> UPS & Monitor</span>
-                        <span class="file-status ready" id="status-badge-ups"><i class="fa-solid fa-circle-check"></i> พร้อมใช้งาน</span>
-                    </div>
-                    <div class="file-name" id="filename-ups">3-it_asset_UPS_Monitor.xlsx</div>
-                    <div class="file-meta" id="filemeta-ups">เครื่องสำรองไฟและหน้าจอคอมพิวเตอร์</div>
-                    <div class="drop-hint">
-                        <i class="fa-solid fa-cloud-arrow-up"></i> ลากไฟล์มาวางที่นี่ หรือคลิกเพื่อเลือกไฟล์
-                    </div>
-                    <input type="file" id="file-input-ups" accept=".xlsx,.xls" hidden>
-                </div>
-            </div>
-        </section>
-
-        <!-- STEP 2: Comparison Overview Scorecard -->
-        <section class="step-card">
-            <div class="step-title-row">
-                <div class="step-num">2</div>
-                <div>
-                    <h2>ผลการเปรียบเทียบภาพรวม (Comparison Dashboard)</h2>
-                    <p>สรุปคะแนนความตรงกันของข้อมูล IT Inventory กับระบบ ERP</p>
-                </div>
-            </div>
-
-            <div class="dashboard-grid">
-                <!-- Score Card Left -->
-                <div class="score-card">
-                    <div class="score-label">คะแนนความตรงกันรวม (Overall Match Rate)</div>
-                    <div class="score-number-row">
-                        <span class="score-big" id="kpi-match-percent">--%</span>
-                    </div>
-                    <div class="score-bar-bg">
-                        <div class="score-bar-fill" id="score-bar-fill" style="width: 0%"></div>
-                    </div>
-                    <div class="score-subtext" id="score-subtext">ตรงกัน <strong id="kpi-matched-count">0</strong> จาก <span id="kpi-total-records">0</span> รายการ</div>
-                    <div id="verified-badge-banner" style="display:none; margin-top: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(16, 185, 129, 0.14); color: #059669; font-size: 12px; font-weight: 600;">
-                        <i class="fa-solid fa-shield-halved"></i> ตรวจซ้ำ 3 รอบสำเร็จ: ข้อมูลใช้งานจริงตรงกัน 100.0%
-                    </div>
-                    <button class="btn btn-card-batch" id="btn-card-batch-trigger">
-                        <i class="fa-solid fa-bolt"></i> 1-Click Auto-Fix 100% (ซิงค์ ERP + แยกแท็บ 4)
-                    </button>
-                </div>
-
-                <!-- Metrics & Breakdown Right -->
-                <div class="metrics-container">
-                    <div class="kpi-stat-cards">
-                        <div class="kpi-box box-matched">
-                            <div class="kpi-icon"><i class="fa-solid fa-circle-check"></i></div>
-                            <div class="kpi-info">
-                                <div class="kpi-val text-green" id="kpi-matched-records">0</div>
-                                <div class="kpi-title" id="kpi-matched-title">ตรงกันสมบูรณ์ (แท็บ 3)</div>
-                            </div>
-                        </div>
-                        <div class="kpi-box box-mismatched">
-                            <div class="kpi-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
-                            <div class="kpi-info">
-                                <div class="kpi-val text-red" id="kpi-mismatched-records">0</div>
-                                <div class="kpi-title">พบจุดต่าง (Mismatch)</div>
-                            </div>
-                        </div>
-                        <div class="kpi-box box-scrapped">
-                            <div class="kpi-icon"><i class="fa-solid fa-filter-circle-xmark"></i></div>
-                            <div class="kpi-info">
-                                <div class="kpi-val text-amber" id="kpi-scrapped-records">0</div>
-                                <div class="kpi-title" id="kpi-scrapped-title">ตัดออก / ตัดจำหน่าย (แท็บ 4)</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Category Breakdown Bars -->
-                    <div class="category-breakdown-card">
-                        <div class="breakdown-row">
-                            <div class="cat-label"><i class="fa-solid fa-desktop text-blue"></i> Hardware</div>
-                            <div class="cat-progress-wrap">
-                                <div class="cat-progress-bar"><div class="cat-progress-fill fill-hw" id="hw-progress-fill" style="width: 0%"></div></div>
-                            </div>
-                            <div class="cat-rate" id="hw-match-percent">--%</div>
-                            <div class="cat-counts">ตรง <span id="hw-matched-val">0</span> / ต่าง <span id="hw-mismatched-val">0</span></div>
-                        </div>
-                        <div class="breakdown-row">
-                            <div class="cat-label"><i class="fa-solid fa-code text-cyan"></i> Software</div>
-                            <div class="cat-progress-wrap">
-                                <div class="cat-progress-bar"><div class="cat-progress-fill fill-sw" id="sw-progress-fill" style="width: 0%"></div></div>
-                            </div>
-                            <div class="cat-rate" id="sw-match-percent">--%</div>
-                            <div class="cat-counts">ตรง <span id="sw-matched-val">0</span> / ต่าง <span id="sw-mismatched-val">0</span></div>
-                        </div>
-                        <div class="breakdown-row">
-                            <div class="cat-label"><i class="fa-solid fa-car-battery text-amber"></i> UPS / Mon</div>
-                            <div class="cat-progress-wrap">
-                                <div class="cat-progress-bar"><div class="cat-progress-fill fill-ups" id="ups-progress-fill" style="width: 0%"></div></div>
-                            </div>
-                            <div class="cat-rate" id="ups-match-percent">--%</div>
-                            <div class="cat-counts">ตรง <span id="ups-matched-val">0</span> / ต่าง <span id="ups-mismatched-val">0</span></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- STEP 3: Mismatch Inspector & Quick-Fix Table -->
-        <section class="step-card">
-            <div class="step-title-row">
-                <div class="step-num">3</div>
-                <div>
-                    <h2>ตรวจสอบจุดต่างและแก้ไขข้อมูล (Mismatch Inspector)</h2>
-                    <p>เปรียบเทียบข้อมูล IT Inventory เคียงข้างกับ ERP (AX) พร้อมปุ่มปรับปรุงข้อมูลได้ทันที</p>
-                </div>
-            </div>
-
-            <!-- Table Filter Toolbar -->
-            <div class="table-toolbar">
-                <div class="tab-pills-row">
-                    <button class="cat-tab active" data-category="all">
-                        ทั้งหมด <span class="tab-count" id="tab-cnt-all">0</span>
-                    </button>
-                    <button class="cat-tab" data-category="hw">
-                        <i class="fa-solid fa-desktop"></i> Hardware <span class="tab-count" id="tab-cnt-hw">0</span>
-                    </button>
-                    <button class="cat-tab" data-category="sw">
-                        <i class="fa-solid fa-code"></i> Software <span class="tab-count" id="tab-cnt-sw">0</span>
-                    </button>
-                    <button class="cat-tab" data-category="ups">
-                        <i class="fa-solid fa-car-battery"></i> UPS & Monitor <span class="tab-count" id="tab-cnt-ups">0</span>
-                    </button>
-                </div>
-
-                <div class="search-and-toggle">
-                    <div class="search-wrap">
-                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                        <input type="text" id="search-input" placeholder="ค้นหา รหัสทรัพย์สิน, ชื่อพนักงาน, แผนก...">
-                        <button id="btn-clear-search" class="btn-clear" title="ล้างคำค้นหา" style="display: none;">✕</button>
-                    </div>
-                    <label class="toggle-mismatch-only">
-                        <input type="checkbox" id="chk-mismatch-only" checked>
-                        <span>แสดงเฉพาะจุดต่าง (Mismatch Only)</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Secondary Filter Pills -->
-            <div class="filter-pills-row">
-                <span class="filter-pill-label">กรองประเภท:</span>
-                <button class="filter-pill active" data-filter="all">ทั้งหมด (ใช้งานจริง)</button>
-                <button class="filter-pill" data-filter="both">รหัสพนักงาน + แผนกไม่ตรง</button>
-                <button class="filter-pill" data-filter="emp">รหัสพนักงานไม่ตรง</button>
-                <button class="filter-pill" data-filter="dept">แผนกไม่ตรง</button>
-                <button class="filter-pill" data-filter="scrapped">ตัดจำหน่ายใน ERP</button>
-                <button class="filter-pill" data-filter="missing">ไม่พบใน ERP</button>
-                <button class="filter-pill" data-filter="excluded"><i class="fa-solid fa-filter-circle-xmark"></i> ข้อมูลที่ถูกตัดออก (แท็บ 4)</button>
-            </div>
-
-            <!-- Table Container -->
-            <div class="table-card">
-                <div class="table-responsive">
-                    <table class="inventory-table">
-                        <thead>
-                            <tr>
-                                <th style="width: 45px;">#</th>
-                                <th style="width: 75px;">หมวด</th>
-                                <th style="width: 155px;">รหัสทรัพย์สิน (Asset ID)</th>
-                                <th style="width: 175px;">ประเภทจุดต่าง</th>
-                                <th style="width: 280px;">ข้อมูลใน IT Inventory</th>
-                                <th style="width: 280px;">ข้อมูลในระบบ ERP (AX)</th>
-                                <th style="width: 170px; text-align: center;">จัดการ</th>
-                            </tr>
-                        </thead>
-                        <tbody id="table-body">
-                            <tr>
-                                <td colspan="7" class="loading-cell">
-                                    <i class="fa-solid fa-spinner fa-spin"></i> กำลังโหลดข้อมูล...
-                                </td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-
-                <!-- Pagination Footer -->
-                <div class="table-pagination">
-                    <div class="pagination-info">
-                        แสดงรายการที่ <strong id="page-start">0</strong> - <strong id="page-end">0</strong> จากทั้งหมด <strong id="total-count">0</strong> รายการ
-                    </div>
-                    <div class="pagination-page-size">
-                        <label for="select-page-size"><i class="fa-solid fa-list-ol"></i> แสดงต่อหน้า:</label>
-                        <select id="select-page-size" class="page-size-select" title="เลือกจำนวนรายการที่แสดงต่อหน้า">
-                            <option value="25" selected>25 รายการ</option>
-                            <option value="50">50 รายการ</option>
-                            <option value="100">100 รายการ</option>
-                            <option value="99999">แสดงทั้งหมด (All)</option>
-                        </select>
-                    </div>
-                    <div class="pagination-controls">
-                        <button id="btn-prev-page" class="btn-page" disabled><i class="fa-solid fa-chevron-left"></i> ก่อนหน้า</button>
-                        <span class="page-current" id="page-current">หน้า 1 / 1</span>
-                        <button id="btn-next-page" class="btn-page" disabled>ถัดไป <i class="fa-solid fa-chevron-right"></i></button>
-                    </div>
-                </div>
-            </div>
-        </section>
-    </main>
-
-    <!-- Modal: Edit IT Record -->
-    <div class="modal-overlay" id="modal-edit" style="display: none;">
-        <div class="modal-box">
+    <!-- Modal: Settings & Logs -->
+    <div class="modal-overlay" id="modal-settings" style="display: none;">
+        <div class="modal-box modal-settings-box">
             <div class="modal-header">
                 <div class="modal-title-wrap">
-                    <div class="modal-icon"><i class="fa-solid fa-pen-to-square"></i></div>
+                    <div class="modal-icon"><i class="fa-solid fa-gear"></i></div>
                     <div>
-                        <h3 class="modal-title">แก้ไขข้อมูล IT Inventory</h3>
-                        <p class="modal-sub">รหัสทรัพย์สิน: <strong id="edit-asset-id-display">--</strong> (<span id="edit-type-display">--</span>)</p>
+                        <h3 class="modal-title">ตั้งค่าและเครื่องมือระบบ</h3>
+                        <p class="modal-sub">การจัดการเซสชัน, Live Logs, และข้อมูลระบบ</p>
                     </div>
                 </div>
-                <button class="modal-close" id="btn-close-edit">✕</button>
+                <button class="modal-close" id="btn-close-settings">✕</button>
             </div>
             <div class="modal-body">
-                <!-- ERP Reference Box -->
-                <div class="ref-ax-box">
-                    <div class="ref-ax-title">
-                        <i class="fa-solid fa-database"></i> ข้อมูลอ้างอิงจากระบบ ERP (AX)
-                    </div>
-                    <div class="ref-ax-grid">
-                        <div class="ref-item">
-                            <span class="ref-label">ชื่อทรัพย์สิน:</span>
-                            <span class="ref-val" id="ref-ax-name">--</span>
-                        </div>
-                        <div class="ref-item">
-                            <span class="ref-label">ผู้ถือครอง (AX):</span>
-                            <span class="ref-val" id="ref-ax-emp">--</span>
-                        </div>
-                        <div class="ref-item">
-                            <span class="ref-label">แผนก (AX):</span>
-                            <span class="ref-val" id="ref-ax-dept">--</span>
-                        </div>
-                        <div class="ref-item">
-                            <span class="ref-label">สถานะ (AX):</span>
-                            <span class="ref-val" id="ref-ax-status">--</span>
-                        </div>
-                    </div>
-                    <div class="ref-action-row">
-                        <button class="btn btn-copy-ax" id="btn-copy-ax">
-                            <i class="fa-solid fa-copy"></i> คัดลอกข้อมูล ERP ลงฟอร์มด้านล่าง
-                        </button>
-                    </div>
+                <div class="settings-group">
+                    <div class="settings-title">การจัดการเซสชันข้อมูล</div>
+                    <p class="settings-desc">ล้างข้อมูลทั้งหมดที่บันทึกไว้ในเครื่องและเริ่มต้นเซสชันใหม่แบบคลีน</p>
+                    <button class="btn btn-secondary btn-sm" id="btn-settings-new-session">
+                        <i class="fa-solid fa-file-circle-plus"></i> เริ่มเซสชันใหม่ (Reset Session)
+                    </button>
                 </div>
 
-                <!-- Edit Form -->
-                <form id="form-edit" onsubmit="return false;">
-                    <input type="hidden" id="edit-uid">
-                    
-                    <div class="form-group-row">
-                        <div class="form-group">
-                            <label for="edit-it-emp-id">รหัสพนักงาน (IT):</label>
-                            <input type="text" id="edit-it-emp-id" class="form-control" placeholder="เช่น 16701002">
-                        </div>
-                        <div class="form-group">
-                            <label for="edit-it-emp-name">ชื่อ-นามสกุลพนักงาน (IT):</label>
-                            <input type="text" id="edit-it-emp-name" class="form-control" placeholder="เช่น สมชาย ใจดี">
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label for="edit-it-dept">แผนก / ฝ่าย (IT):</label>
-                        <input type="text" id="edit-it-dept" class="form-control" placeholder="เช่น 1004/สารสนเทศ">
-                    </div>
-
-                    <div class="form-group-row">
-                        <div class="form-group">
-                            <label for="edit-it-sn">Serial Number (S/N):</label>
-                            <input type="text" id="edit-it-sn" class="form-control" placeholder="S/N อุปกรณ์">
-                        </div>
-                        <div class="form-group">
-                            <label for="edit-it-asset-id">รหัสทรัพย์สิน (Asset ID):</label>
-                            <input type="text" id="edit-it-asset-id" class="form-control" placeholder="FTI/...">
-                        </div>
-                    </div>
-
-                    <div class="alert-box" id="edit-mismatch-display">
-                        สถานะจุดต่างปัจจุบัน: <span id="edit-mismatch-text">--</span>
-                    </div>
-                </form>
+                <div class="settings-group">
+                    <div class="settings-title">System Console & Logs</div>
+                    <p class="settings-desc">เปิดหน้าต่าง System Logs สำหรับการตรวจสอบข้อผิดพลาด</p>
+                    <button class="btn btn-secondary btn-sm" id="btn-settings-open-logs">
+                        <i class="fa-solid fa-terminal"></i> เปิดหน้าต่าง Live Logs
+                    </button>
+                </div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" id="btn-cancel-edit">ยกเลิก</button>
-                <button class="btn btn-primary" id="btn-save-edit">
-                    <i class="fa-solid fa-floppy-disk"></i> บันทึกข้อมูลและคำนวณใหม่
-                </button>
+                <button class="btn btn-secondary" id="btn-done-settings">ปิดหน้าต่าง</button>
             </div>
         </div>
     </div>
 
-    <!-- System Console & Live Log Modal (Centered Pro Max Terminal) -->
+    <!-- Modal: System Console & Logs -->
     <div class="modal-overlay" id="modal-logs" style="display: none;">
         <div class="modal-box modal-terminal-box">
             <div class="modal-header terminal-header">
                 <div class="modal-title-wrap">
-                    <div class="terminal-dots">
-                        <span class="dot dot-red" id="btn-close-logs-dot" title="ปิด"></span>
-                        <span class="dot dot-yellow"></span>
-                        <span class="dot dot-green" id="btn-maximize-logs-dot" title="ขยายเต็มจอ/ย่อ"></span>
-                    </div>
                     <div class="modal-icon"><i class="fa-solid fa-terminal"></i></div>
                     <div>
                         <h3 class="modal-title">System Console & Live Logs</h3>
-                        <p class="modal-sub">บันทึกการทำงานและสถานะระบบแบบ Real-time</p>
+                        <p class="modal-sub">บันทึกการทำงานของระบบ</p>
                     </div>
                 </div>
-                <div class="modal-header-actions">
-                    <button class="btn btn-icon-theme btn-sm" id="btn-maximize-logs" title="ขยายเต็มจอ / ย่อขนาด">
-                        <i class="fa-solid fa-expand" id="icon-maximize"></i>
-                    </button>
-                    <button class="modal-close" id="btn-close-logs" title="ปิดหน้าต่าง">✕</button>
-                </div>
+                <button class="modal-close" id="btn-close-logs">✕</button>
             </div>
             <div class="modal-body terminal-body">
-                <!-- Terminal Toolbar -->
                 <div class="terminal-toolbar">
-                    <div class="terminal-file-badge">
-                        <i class="fa-solid fa-file-lines"></i>
-                        <span>ไฟล์บันทึก:</span>
-                        <code id="log-file-path">E:\fti_debug.log</code>
-                    </div>
-                    <div class="terminal-controls">
-                        <div class="terminal-search-box">
-                            <i class="fa-solid fa-magnifying-glass"></i>
-                            <input type="text" id="log-search-input" placeholder="ค้นหา / กรองข้อความ...">
-                        </div>
-                        <button class="btn btn-secondary btn-sm" id="btn-refresh-logs" title="โหลด Log ล่าสุด">
-                            <i class="fa-solid fa-arrows-rotate"></i> <span>โหลดล่าสุด</span>
-                        </button>
-                        <button class="btn btn-secondary btn-sm" id="btn-copy-logs" title="คัดลอกข้อความทั้งหมด">
-                            <i class="fa-solid fa-copy"></i> <span>คัดลอก</span>
-                        </button>
-                        <a href="/api/logs/download" target="_blank" class="btn btn-primary btn-sm" id="btn-download-logs" style="text-decoration: none;">
-                            <i class="fa-solid fa-download"></i> <span>ดาวน์โหลด .log</span>
-                        </a>
-                    </div>
+                    <input type="text" id="log-search-input" placeholder="ค้นหาข้อความ Log..." class="terminal-search-box">
+                    <button class="btn btn-secondary btn-sm" id="btn-refresh-logs"><i class="fa-solid fa-arrows-rotate"></i> โหลดล่าสุด</button>
+                    <a href="/api/logs/download" target="_blank" class="btn btn-primary btn-sm" style="text-decoration:none;"><i class="fa-solid fa-download"></i> ดาวน์โหลด .log</a>
                 </div>
-                <!-- Terminal Screen -->
-                <div class="terminal-screen-wrap">
-                    <pre id="log-content-area" class="terminal-pre">กำลังโหลด System Log...</pre>
-                </div>
+                <pre id="log-content-area" class="terminal-pre">กำลังโหลด Log...</pre>
             </div>
-            <div class="modal-footer terminal-footer">
-                <div class="terminal-status-info">
-                    <span class="status-indicator-dot"></span>
-                    <span id="log-status-text">พร้อมใช้งาน</span>
-                </div>
-                <button class="btn btn-secondary" id="btn-done-logs">ปิดหน้าต่าง</button>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" id="btn-done-logs">ปิด</button>
             </div>
         </div>
     </div>
 
-    <!-- Version History Modal (Centered Pro Max Timeline) -->
+    <!-- Modal: Version History -->
     <div class="modal-overlay" id="modal-history" style="display: none;">
         <div class="modal-box modal-history-box">
             <div class="modal-header">
@@ -529,18 +435,16 @@
                     <div class="modal-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
                     <div>
                         <h3 class="modal-title">ประวัติการแก้ไข (Version History)</h3>
-                        <p class="modal-sub">บันทึกประวัติการกระทำล่าสุดเหมือน Google Workspace สามารถกดย้อนกลับสถานะได้ทันที</p>
+                        <p class="modal-sub">รายการแก้ไขระดับเซลล์และการทำ Auto-Fix สามารถย้อนกลับได้ทันที</p>
                     </div>
                 </div>
-                <button class="modal-close" id="btn-close-history" title="ปิดหน้าต่าง">✕</button>
+                <button class="modal-close" id="btn-close-history">✕</button>
             </div>
-            <div class="modal-body" style="max-height: 520px; overflow-y: auto;">
-                <div id="history-timeline-list" class="timeline-list">
-                    <!-- Populated dynamically via JS -->
-                </div>
+            <div class="modal-body" style="max-height: 500px; overflow-y: auto;">
+                <div id="history-timeline-list" class="timeline-list"></div>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" id="btn-done-history">ปิดหน้าต่าง</button>
+                <button class="btn btn-secondary" id="btn-done-history">ปิด</button>
             </div>
         </div>
     </div>
@@ -553,7 +457,6 @@
         </div>
     </div>
 
-    <!-- Application Script -->
     <script src="/static/app.js"></script>
 </body>
 </html>
