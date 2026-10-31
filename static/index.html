@@ -206,27 +206,83 @@
                         </div>
                     </div>
 
-                    <!-- Mini KPI Dashboard for this category -->
+                    <!-- Bento KPI Dashboard for this category -->
                     <div class="category-kpi-bar" id="category-kpi-bar" style="display: none;">
-                        <div class="kpi-mini-card">
-                            <span class="kpi-mini-label">คะแนนความตรงกัน:</span>
-                            <span class="kpi-mini-val text-green" id="cat-kpi-match-rate">--%</span>
+                        <div class="kpi-header-row">
+                            <div class="kpi-header-title">
+                                <i class="fa-solid fa-chart-line text-cyan"></i> สรุปผลการเปรียบเทียบข้อมูล
+                            </div>
+                            <button class="btn-toggle-kpi" id="btn-toggle-kpi" title="พับย่อ / ขยาย แถบสถิติ">
+                                <span class="toggle-text">พับเก็บ</span>
+                                <i class="fa-solid fa-chevron-up"></i>
+                            </button>
                         </div>
-                        <div class="kpi-mini-card">
-                            <span class="kpi-mini-label">ตรงกัน (แท็บ 3):</span>
-                            <span class="kpi-mini-val text-green" id="cat-kpi-matched">0</span>
-                        </div>
-                        <div class="kpi-mini-card">
-                            <span class="kpi-mini-label">พบจุดต่าง (Mismatch):</span>
-                            <span class="kpi-mini-val text-red" id="cat-kpi-mismatched">0</span>
-                        </div>
-                        <div class="kpi-mini-card">
-                            <span class="kpi-mini-label">ตัดออก (แท็บ 4):</span>
-                            <span class="kpi-mini-val text-amber" id="cat-kpi-excluded">0</span>
-                        </div>
-                        <div class="kpi-mini-card">
-                            <span class="kpi-mini-label">แก้ไขโดยผู้ใช้:</span>
-                            <span class="kpi-mini-val text-cyan" id="cat-kpi-user-edited">0</span>
+                        <div class="bento-kpi-grid" id="bento-kpi-grid">
+                            <!-- Card 1: Match Rate -->
+                            <div class="bento-card bento-rate">
+                                <div class="bento-card-top">
+                                    <span class="bento-label">คะแนนความตรงกัน</span>
+                                    <div class="bento-icon-badge icon-rate"><i class="fa-solid fa-chart-pie"></i></div>
+                                </div>
+                                <div class="bento-value-row">
+                                    <span class="bento-val text-green" id="cat-kpi-match-rate">--%</span>
+                                </div>
+                                <div class="bento-progress-track">
+                                    <div class="bento-progress-bar" id="cat-kpi-progress" style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <!-- Card 2: Matched Tab 3 -->
+                            <div class="bento-card bento-matched">
+                                <div class="bento-card-top">
+                                    <span class="bento-label">ตรงกันสมบูรณ์ (แท็บ 3)</span>
+                                    <div class="bento-icon-badge icon-matched"><i class="fa-solid fa-circle-check"></i></div>
+                                </div>
+                                <div class="bento-value-row">
+                                    <span class="bento-val text-green" id="cat-kpi-matched">0</span>
+                                    <span class="bento-unit">รายการ</span>
+                                </div>
+                                <div class="bento-hint">ข้อมูลพร้อมใช้งานจริง 100%</div>
+                            </div>
+
+                            <!-- Card 3: Mismatch -->
+                            <div class="bento-card bento-mismatched">
+                                <div class="bento-card-top">
+                                    <span class="bento-label">พบจุดต่าง (Mismatch)</span>
+                                    <div class="bento-icon-badge icon-mismatched"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                                </div>
+                                <div class="bento-value-row">
+                                    <span class="bento-val text-red" id="cat-kpi-mismatched">0</span>
+                                    <span class="bento-unit">รายการ</span>
+                                </div>
+                                <div class="bento-hint">รอตรวจสอบ / Auto-Fix</div>
+                            </div>
+
+                            <!-- Card 4: Excluded Tab 4 -->
+                            <div class="bento-card bento-excluded">
+                                <div class="bento-card-top">
+                                    <span class="bento-label">ตัดออก (แท็บ 4)</span>
+                                    <div class="bento-icon-badge icon-excluded"><i class="fa-solid fa-ban"></i></div>
+                                </div>
+                                <div class="bento-value-row">
+                                    <span class="bento-val text-amber" id="cat-kpi-excluded">0</span>
+                                    <span class="bento-unit">รายการ</span>
+                                </div>
+                                <div class="bento-hint">ตัดจำหน่าย / ไม่อยู่ใน ERP</div>
+                            </div>
+
+                            <!-- Card 5: User Edited -->
+                            <div class="bento-card bento-user-edited">
+                                <div class="bento-card-top">
+                                    <span class="bento-label">แก้ไขโดยผู้ใช้</span>
+                                    <div class="bento-icon-badge icon-user-edited"><i class="fa-solid fa-user-pen"></i></div>
+                                </div>
+                                <div class="bento-value-row">
+                                    <span class="bento-val text-cyan" id="cat-kpi-user-edited">0</span>
+                                    <span class="bento-unit">รายการ</span>
+                                </div>
+                                <div class="bento-hint">บันทึกค่าแล้ว ปลอดภัยไม่ถูกทับ</div>
+                            </div>
                         </div>
                     </div>
 

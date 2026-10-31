@@ -62,7 +62,10 @@ document.addEventListener("DOMContentLoaded", () => {
         btnExportCategory: document.getElementById("btn-export-category"),
         workspaceStatusBadge: document.getElementById("workspace-status-badge"),
         categoryKpiBar: document.getElementById("category-kpi-bar"),
+        btnToggleKpi: document.getElementById("btn-toggle-kpi"),
+        bentoKpiGrid: document.getElementById("bento-kpi-grid"),
         catKpiMatchRate: document.getElementById("cat-kpi-match-rate"),
+        catKpiProgress: document.getElementById("cat-kpi-progress"),
         catKpiMatched: document.getElementById("cat-kpi-matched"),
         catKpiMismatched: document.getElementById("cat-kpi-mismatched"),
         catKpiExcluded: document.getElementById("cat-kpi-excluded"),
@@ -146,6 +149,26 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.themeToggle.addEventListener("click", () => {
         applyTheme(state.theme === "dark" ? "light" : "dark");
     });
+
+    // KPI Bar Collapse/Expand Toggle
+    if (elements.btnToggleKpi && elements.bentoKpiGrid) {
+        const isCollapsed = localStorage.getItem("fti_kpi_collapsed") === "true";
+        if (isCollapsed) {
+            elements.bentoKpiGrid.classList.add("collapsed");
+            const txt = elements.btnToggleKpi.querySelector(".toggle-text");
+            const icon = elements.btnToggleKpi.querySelector("i");
+            if (txt) txt.textContent = "ขยาย";
+            if (icon) icon.className = "fa-solid fa-chevron-down";
+        }
+        elements.btnToggleKpi.addEventListener("click", () => {
+            const nowCollapsed = elements.bentoKpiGrid.classList.toggle("collapsed");
+            localStorage.setItem("fti_kpi_collapsed", nowCollapsed);
+            const txt = elements.btnToggleKpi.querySelector(".toggle-text");
+            const icon = elements.btnToggleKpi.querySelector("i");
+            if (txt) txt.textContent = nowCollapsed ? "ขยาย" : "พับเก็บ";
+            if (icon) icon.className = nowCollapsed ? "fa-solid fa-chevron-down" : "fa-solid fa-chevron-up";
+        });
+    }
 
     // =========================================================================
     // Toast Notification
@@ -313,7 +336,11 @@ document.addEventListener("DOMContentLoaded", () => {
         // Update KPI bar if compared
         if (st === "compared" && state.systemState && state.systemState.summary) {
             const catSum = (state.systemState.summary.by_category && state.systemState.summary.by_category[cat]) || {};
-            elements.catKpiMatchRate.textContent = `${catSum.match_rate || 0}%`;
+            const rate = catSum.match_rate || 0;
+            elements.catKpiMatchRate.textContent = `${rate}%`;
+            if (elements.catKpiProgress) {
+                elements.catKpiProgress.style.width = `${rate}%`;
+            }
             elements.catKpiMatched.textContent = (catSum.matched || 0).toLocaleString();
             elements.catKpiMismatched.textContent = (catSum.mismatched || 0).toLocaleString();
             elements.catKpiExcluded.textContent = (catSum.excluded || 0).toLocaleString();
@@ -432,13 +459,13 @@ document.addEventListener("DOMContentLoaded", () => {
             // Status Badge
             let statusBadge = "";
             if (isExcluded) {
-                statusBadge = `<span class="tag-cat tag-ups" style="font-size: 11px;"><i class="fa-solid fa-filter-circle-xmark"></i> ตัดออก</span>`;
+                statusBadge = `<span class="grid-badge grid-badge-excluded"><i class="fa-solid fa-ban"></i> ตัดออก</span>`;
             } else if (isMatch === true) {
-                statusBadge = `<span class="tag-cat tag-hw" style="color: #059669; background: #ecfdf5; font-size: 11px;"><i class="fa-solid fa-circle-check"></i> ตรงกัน 100%</span>`;
+                statusBadge = `<span class="grid-badge grid-badge-match"><i class="fa-solid fa-circle-check"></i> ตรงกัน 100%</span>`;
             } else if (isMatch === false) {
-                statusBadge = `<span class="tag-cat" style="color: #dc2626; background: #fef2f2; font-size: 11px;"><i class="fa-solid fa-triangle-exclamation"></i> ไม่ตรง</span>`;
+                statusBadge = `<span class="grid-badge grid-badge-mismatch"><i class="fa-solid fa-triangle-exclamation"></i> ไม่ตรง</span>`;
             } else {
-                statusBadge = `<span class="file-badge badge-empty" style="font-size: 11px;">รอเปรียบเทียบ</span>`;
+                statusBadge = `<span class="grid-badge grid-badge-pending">รอเปรียบเทียบ</span>`;
             }
 
             let trHtml = `
