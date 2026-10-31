@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", () => {
         gridSearch: "",
         gridPage: 1,
         gridPageSize: 50,
+        viewMode: localStorage.getItem("fti_view_mode") || "mismatch", // 'mismatch' (default) or 'spreadsheet'
         selectedRecord: null,
         systemState: null,
         theme: localStorage.getItem("fti_theme") || "light"
@@ -59,8 +60,11 @@ document.addEventListener("DOMContentLoaded", () => {
         // Workspace Controls
         btnRunCompare: document.getElementById("btn-run-compare"),
         btnRunAutoFix: document.getElementById("btn-run-autofix"),
+        btnExportMismatch: document.getElementById("btn-export-mismatch"),
         btnExportCategory: document.getElementById("btn-export-category"),
         workspaceStatusBadge: document.getElementById("workspace-status-badge"),
+        btnModeMismatch: document.getElementById("btn-mode-mismatch"),
+        btnModeSpreadsheet: document.getElementById("btn-mode-spreadsheet"),
         categoryKpiBar: document.getElementById("category-kpi-bar"),
         btnToggleKpi: document.getElementById("btn-toggle-kpi"),
         bentoKpiGrid: document.getElementById("bento-kpi-grid"),
@@ -301,34 +305,45 @@ document.addEventListener("DOMContentLoaded", () => {
         const st = (state.systemState && state.systemState.category_states && state.systemState.category_states[cat]) || "empty";
         const badge = elements.workspaceStatusBadge;
 
-        elements.btnExportCategory.href = `/api/export/inventory/${cat}`;
+        if (elements.btnExportCategory) elements.btnExportCategory.href = `/api/export/inventory/${cat}`;
+        if (elements.btnExportMismatch) elements.btnExportMismatch.href = `/api/export/mismatch/${cat}`;
+
+        // Sync view mode buttons
+        if (elements.btnModeMismatch && elements.btnModeSpreadsheet) {
+            elements.btnModeMismatch.classList.toggle("active", state.viewMode === "mismatch");
+            elements.btnModeSpreadsheet.classList.toggle("active", state.viewMode === "spreadsheet");
+        }
 
         if (st === "compared") {
             badge.className = "status-indicator-badge text-green";
             badge.innerHTML = '<i class="fa-solid fa-circle-check"></i> เปรียบเทียบแล้ว';
             elements.categoryKpiBar.style.display = "flex";
-            elements.btnExportCategory.style.display = "inline-flex";
+            if (elements.btnExportMismatch) elements.btnExportMismatch.style.display = "inline-flex";
+            if (elements.btnExportCategory) elements.btnExportCategory.style.display = "inline-flex";
             elements.btnRunAutoFix.style.display = "inline-flex";
             elements.btnRunCompare.innerHTML = '<i class="fa-solid fa-arrows-rotate"></i> เปรียบเทียบใหม่';
         } else if (st === "stale") {
             badge.className = "status-indicator-badge text-amber";
             badge.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> ข้อมูลเปลี่ยน - รอเปรียบเทียบใหม่';
             elements.categoryKpiBar.style.display = "none";
-            elements.btnExportCategory.style.display = "none";
+            if (elements.btnExportMismatch) elements.btnExportMismatch.style.display = "none";
+            if (elements.btnExportCategory) elements.btnExportCategory.style.display = "none";
             elements.btnRunAutoFix.style.display = "none";
             elements.btnRunCompare.innerHTML = '<i class="fa-solid fa-play"></i> เริ่มเปรียบเทียบ';
         } else if (st === "loaded") {
             badge.className = "status-indicator-badge text-blue";
             badge.innerHTML = '<i class="fa-solid fa-circle-info"></i> พร้อมให้กดเปรียบเทียบ';
             elements.categoryKpiBar.style.display = "none";
-            elements.btnExportCategory.style.display = "none";
+            if (elements.btnExportMismatch) elements.btnExportMismatch.style.display = "none";
+            if (elements.btnExportCategory) elements.btnExportCategory.style.display = "none";
             elements.btnRunAutoFix.style.display = "none";
             elements.btnRunCompare.innerHTML = '<i class="fa-solid fa-play"></i> เริ่มเปรียบเทียบ';
         } else {
             badge.className = "status-indicator-badge";
             badge.innerHTML = 'ยังไม่มีไฟล์';
             elements.categoryKpiBar.style.display = "none";
-            elements.btnExportCategory.style.display = "none";
+            if (elements.btnExportMismatch) elements.btnExportMismatch.style.display = "none";
+            if (elements.btnExportCategory) elements.btnExportCategory.style.display = "none";
             elements.btnRunAutoFix.style.display = "none";
             elements.btnRunCompare.innerHTML = '<i class="fa-solid fa-play"></i> เริ่มเปรียบเทียบ';
         }
@@ -423,20 +438,55 @@ document.addEventListener("DOMContentLoaded", () => {
         const cols = data.columns || [];
         const records = data.records || [];
         const cat = data.category;
+        const isMismatchMode = (state.viewMode === "mismatch");
 
         // 1. Build Header
-        let thHtml = `
-            <th class="col-sticky-1" style="width: 45px; text-align: center;">#</th>
-            <th class="col-sticky-2" style="width: 140px;">สถานะ</th>
-        `;
-        cols.forEach(col => {
-            thHtml += `<th>${col}</th>`;
-        });
-        elements.spreadsheetThead.innerHTML = `<tr>${thHtml}</tr>`;
+        if (isMismatchMode) {
+            elements.spreadsheetThead.innerHTML = `
+                <tr>
+                    <th class="col-sticky-1" style="width: 45px; text-align: center;">#</th>
+                    <th class="col-sticky-2" style="width: 135px;">สถานะ</th>
+                    <th style="width: 150px;">รหัสทรัพย์สิน (Asset ID)</th>
+                    <th style="width: 190px;">ประเภทจุดต่าง (Mismatch)</th>
+                    <th style="min-width: 250px;">ข้อมูลใน IT Inventory (เดิม/ล่าสุด)</th>
+                    <th style="min-width: 250px;">ข้อมูลในระบบ ERP (AX)</th>
+                    <th style="width: 170px; text-align: center;">การจัดการ</th>
+                </tr>
+            `;
+        } else {
+            let thHtml = `
+                <th class="col-sticky-1" style="width: 45px; text-align: center;">#</th>
+                <th class="col-sticky-2" style="width: 140px;">สถานะ</th>
+            `;
+            cols.forEach(col => {
+                thHtml += `<th>${col}</th>`;
+            });
+            elements.spreadsheetThead.innerHTML = `<tr>${thHtml}</tr>`;
+        }
 
         // 2. Build Rows
         if (records.length === 0) {
-            elements.spreadsheetTbody.innerHTML = `<tr><td colspan="${cols.length + 2}" style="padding: 28px; text-align: center; color: var(--text-muted);">ไม่พบรายการที่ตรงกับเงื่อนไข</td></tr>`;
+            elements.spreadsheetTbody.innerHTML = `
+                <tr>
+                    <td colspan="${isMismatchMode ? 7 : cols.length + 2}" style="padding: 38px 20px; text-align: center;">
+                        <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;">
+                            <i class="fa-solid fa-circle-check text-green" style="font-size: 36px;"></i>
+                            <h4 style="font-size: 15px; font-weight: 700; color: var(--text-primary); margin: 0;">ไม่พบรายการที่ตรงกับเงื่อนไข</h4>
+                            <p style="font-size: 12.5px; color: var(--text-muted); margin: 0 0 10px 0;">ข้อมูลในหมวดนี้ไม่มีจุดต่างค้างอยู่ หรือรายการทั้งหมดตรงกับระบบ ERP แล้ว</p>
+                            <button class="btn btn-secondary btn-sm" id="btn-empty-reset-filter"><i class="fa-solid fa-rotate-left"></i> แสดงรายการทั้งหมด</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+            const btnReset = document.getElementById("btn-empty-reset-filter");
+            if (btnReset) {
+                btnReset.addEventListener("click", () => {
+                    elements.gridFilterPills.forEach(p => p.classList.toggle("active", p.getAttribute("data-filter") === "all"));
+                    state.gridFilter = "all";
+                    state.gridPage = 1;
+                    loadCategoryWorkspace(state.activeCategory);
+                });
+            }
             updatePaginationInfo(0, 0, 0, 1, 1);
             return;
         }
@@ -451,6 +501,8 @@ document.addEventListener("DOMContentLoaded", () => {
             const userEdited = r.user_edited_cols || [];
             const isExcluded = r.is_excluded;
             const isMatch = r.is_match;
+            const ax = r.ax_data || {};
+            const mType = r.mismatch_type || "ปกติ";
 
             let rowClass = "";
             if (isExcluded) rowClass += " row-excluded";
@@ -461,38 +513,97 @@ document.addEventListener("DOMContentLoaded", () => {
             if (isExcluded) {
                 statusBadge = `<span class="grid-badge grid-badge-excluded"><i class="fa-solid fa-ban"></i> ตัดออก</span>`;
             } else if (isMatch === true) {
-                statusBadge = `<span class="grid-badge grid-badge-match"><i class="fa-solid fa-circle-check"></i> ตรงกัน 100%</span>`;
+                if (userEdited.length > 0) {
+                    statusBadge = `<span class="grid-badge" style="background: rgba(14, 165, 233, 0.16); color: #0284c7; border: 1px solid rgba(14, 165, 233, 0.3);"><i class="fa-solid fa-user-pen"></i> แก้ไขเอง 100%</span>`;
+                } else {
+                    statusBadge = `<span class="grid-badge grid-badge-match"><i class="fa-solid fa-circle-check"></i> ตรงกัน 100%</span>`;
+                }
             } else if (isMatch === false) {
                 statusBadge = `<span class="grid-badge grid-badge-mismatch"><i class="fa-solid fa-triangle-exclamation"></i> ไม่ตรง</span>`;
             } else {
                 statusBadge = `<span class="grid-badge grid-badge-pending">รอเปรียบเทียบ</span>`;
             }
 
-            let trHtml = `
-                <tr class="${rowClass}" data-uid="${uid}">
-                    <td class="col-sticky-1" style="text-align: center; color: var(--text-muted);">${rowNum}</td>
-                    <td class="col-sticky-2">${statusBadge}</td>
-            `;
+            if (isMismatchMode) {
+                // Mismatch Inspector View: Clear Side-by-Side Comparison
+                const aid = r.asset_id || r.cells["Asset_Number"] || r.cells["License_Key"] || "-";
+                const itEmp = r.it_emp_id || "-";
+                const itName = r.it_emp_name || "-";
+                const itDept = r.it_dept || "-";
 
-            cols.forEach(col => {
-                const val = r.cells[col] || "";
-                let cellClass = "";
+                const axEmp = ax.ax_emp_id || "-";
+                const axName = ax.ax_emp_name || "-";
+                const axDept = ax.ax_dept || "-";
+                const axStatus = ax.ax_status || (ax.asset_id ? "ปกติ" : "ไม่พบใน ERP");
 
-                if (col.includes("รหัสพนักงาน") && diffs.includes("emp_id")) {
-                    cellClass += " cell-diff-emp";
-                }
-                if ((col.includes("สถานที่เก็บ") || col.includes("แผนก")) && diffs.includes("dept")) {
-                    cellClass += " cell-diff-dept";
-                }
-                if (userEdited.includes(col)) {
-                    cellClass += " cell-user-edited";
-                }
+                let mTypeColor = "#dc2626";
+                if (mType.includes("แผนก")) mTypeColor = "#d97706";
+                if (mType.includes("ตัดจำหน่าย")) mTypeColor = "#ea580c";
+                if (mType.includes("ตรงกัน")) mTypeColor = "#16a34a";
 
-                trHtml += `<td class="${cellClass}" data-col="${col}" title="ดับเบิลคลิกเพื่อแก้ไข">${val}</td>`;
-            });
+                tbodyHtml += `
+                    <tr class="${rowClass}" data-uid="${uid}">
+                        <td class="col-sticky-1" style="text-align: center; color: var(--text-muted);">${rowNum}</td>
+                        <td class="col-sticky-2">${statusBadge}</td>
+                        <td style="font-family: var(--font-mono); font-weight: 600; color: var(--blue-primary);">${aid}</td>
+                        <td style="font-weight: 600; color: ${mTypeColor};">${mType}</td>
+                        <td>
+                            <div class="comp-box">
+                                <div class="comp-row"><span class="comp-label">รหัส:</span> <span class="comp-val ${diffs.includes('emp_id') ? 'diff-emp' : ''}">${itEmp}</span></div>
+                                <div class="comp-row"><span class="comp-label">ชื่อ:</span> <span class="comp-val">${itName}</span></div>
+                                <div class="comp-row"><span class="comp-label">แผนก:</span> <span class="comp-val ${diffs.includes('dept') ? 'diff-dept' : ''}">${itDept}</span></div>
+                            </div>
+                        </td>
+                        <td>
+                            <div class="comp-box">
+                                <div class="comp-row"><span class="comp-label">รหัส:</span> <span class="comp-val">${axEmp}</span></div>
+                                <div class="comp-row"><span class="comp-label">ชื่อ:</span> <span class="comp-val">${axName}</span></div>
+                                <div class="comp-row"><span class="comp-label">แผนก:</span> <span class="comp-val">${axDept}</span></div>
+                                <div class="comp-row"><span class="comp-label">สถานะ:</span> <span class="comp-val" style="color: ${ax.is_scrapped ? '#ef4444' : 'inherit'}; font-weight: 600;">${axStatus}</span></div>
+                            </div>
+                        </td>
+                        <td style="text-align: center;">
+                            <div class="row-actions-group" style="justify-content: center;">
+                                ${ax.asset_id && !ax.is_scrapped && !isMatch ? `
+                                    <button class="btn btn-primary btn-sm btn-row-sync" data-uid="${uid}" title="ซิงค์ข้อมูลแถวนี้ให้ตรงกับ ERP ทันที">
+                                        <i class="fa-solid fa-bolt"></i> ซิงค์ ERP
+                                    </button>
+                                ` : (isMatch ? `<span style="font-size: 11px; color: #10b981; font-weight: 600;"><i class="fa-solid fa-check-double"></i> ซิงค์ตรงแล้ว</span>` : '')}
+                                <button class="btn btn-secondary btn-sm btn-row-toggle-excl" data-uid="${uid}" title="${isExcluded ? 'กู้คืนเป็นรายการใช้งาน' : 'ตัดรายการนี้ออก'}">
+                                    <i class="fa-solid ${isExcluded ? 'fa-arrow-rotate-left text-green' : 'fa-ban text-amber'}"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            } else {
+                // Spreadsheet Full Column View
+                let trHtml = `
+                    <tr class="${rowClass}" data-uid="${uid}">
+                        <td class="col-sticky-1" style="text-align: center; color: var(--text-muted);">${rowNum}</td>
+                        <td class="col-sticky-2">${statusBadge}</td>
+                `;
 
-            trHtml += `</tr>`;
-            tbodyHtml += trHtml;
+                cols.forEach(col => {
+                    const val = r.cells[col] || "";
+                    let cellClass = "";
+
+                    if (col.includes("รหัสพนักงาน") && diffs.includes("emp_id")) {
+                        cellClass += " cell-diff-emp";
+                    }
+                    if ((col.includes("สถานที่เก็บ") || col.includes("แผนก")) && diffs.includes("dept")) {
+                        cellClass += " cell-diff-dept";
+                    }
+                    if (userEdited.includes(col)) {
+                        cellClass += " cell-user-edited";
+                    }
+
+                    trHtml += `<td class="${cellClass}" data-col="${col}" title="ดับเบิลคลิกเพื่อแก้ไข">${val}</td>`;
+                });
+
+                trHtml += `</tr>`;
+                tbodyHtml += trHtml;
+            }
         });
 
         elements.spreadsheetTbody.innerHTML = tbodyHtml;
@@ -589,6 +700,84 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
             });
         });
+
+        // Quick-Fix Sync ERP button in Mismatch Inspector table
+        document.querySelectorAll(".btn-row-sync").forEach(btn => {
+            btn.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const uid = btn.getAttribute("data-uid");
+                const rec = records.find(r => r.uid === uid);
+                if (!rec) return;
+
+                const ax = rec.ax_data || {};
+                const cmap = {
+                    hw: ["รหัสพนักงาน", "ผู้ใช้งาน/ดูแล", "สถานที่เก็บ"],
+                    sw: ["รหัสพนักงาน", "ผู้ดูแล", "สถานที่เก็บ"],
+                    ups: ["รหัสพนักงาน", "ผู้ใช้งาน/ดูแล", "สถานที่เก็บ"]
+                };
+                const cols = cmap[rec.category] || cmap["hw"];
+
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
+
+                try {
+                    if (ax.ax_emp_id) {
+                        await fetch("/api/cell", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ uid, column: cols[0], value: ax.ax_emp_id, user: "IT Officer" })
+                        });
+                    }
+                    if (ax.ax_emp_name) {
+                        await fetch("/api/cell", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ uid, column: cols[1], value: ax.ax_emp_name, user: "IT Officer" })
+                        });
+                    }
+                    if (ax.ax_dept) {
+                        await fetch("/api/cell", {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ uid, column: cols[2], value: ax.ax_dept, user: "IT Officer" })
+                        });
+                    }
+                    showToast(`ซิงค์ข้อมูล ${rec.asset_id || uid} ให้ตรงกับ ERP เรียบร้อย`, "success");
+                    await fetchSystemState();
+                    await loadCategoryWorkspace(rec.category);
+                } catch (err) {
+                    showToast(`ซิงค์ล้มเหลว: ${err.message}`, "error");
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-bolt"></i> ซิงค์ ERP';
+                }
+            });
+        });
+
+        // Toggle Exclude in Mismatch Inspector table
+        document.querySelectorAll(".btn-row-toggle-excl").forEach(btn => {
+            btn.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const uid = btn.getAttribute("data-uid");
+                const rec = records.find(r => r.uid === uid);
+                if (!rec) return;
+
+                try {
+                    const res = await fetch("/api/row/exclusion", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ uid, exclude: !rec.is_excluded, user: "IT Officer" })
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail);
+
+                    showToast(rec.is_excluded ? "คืนกลับเป็นรายการใช้งานแล้ว" : "ย้ายไปข้อมูลที่ถูกตัดออกแล้ว", "info");
+                    await fetchSystemState();
+                    await loadCategoryWorkspace(rec.category);
+                } catch (err) {
+                    showToast(`ดำเนินการล้มเหลว: ${err.message}`, "error");
+                }
+            });
+        });
     }
 
     // =========================================================================
@@ -681,6 +870,31 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.btnCloseSidepanel.addEventListener("click", () => {
         elements.sidePanelBody.innerHTML = '<p class="side-panel-empty">คลิกเลือกแถวในตารางเพื่อดูข้อมูลเปรียบเทียบกับ ERP</p>';
     });
+
+    // =========================================================================
+    // Dual View Mode Switcher (Mismatch Inspector vs Spreadsheet Grid)
+    // =========================================================================
+    if (elements.btnModeMismatch) {
+        elements.btnModeMismatch.addEventListener("click", () => {
+            state.viewMode = "mismatch";
+            localStorage.setItem("fti_view_mode", "mismatch");
+            elements.btnModeMismatch.classList.add("active");
+            elements.btnModeSpreadsheet.classList.remove("active");
+            state.gridPage = 1;
+            loadCategoryWorkspace(state.activeCategory);
+        });
+    }
+
+    if (elements.btnModeSpreadsheet) {
+        elements.btnModeSpreadsheet.addEventListener("click", () => {
+            state.viewMode = "spreadsheet";
+            localStorage.setItem("fti_view_mode", "spreadsheet");
+            elements.btnModeSpreadsheet.classList.add("active");
+            elements.btnModeMismatch.classList.remove("active");
+            state.gridPage = 1;
+            loadCategoryWorkspace(state.activeCategory);
+        });
+    }
 
     // =========================================================================
     // Grid Filter Pills & Search

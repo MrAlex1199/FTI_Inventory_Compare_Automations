@@ -310,7 +310,11 @@ async def get_category_grid(
     # Filter logic
     filtered = all_recs
     if filter_type == "mismatch":
-        filtered = [r for r in filtered if not r.get("is_excluded") and r.get("is_match") is False]
+        mismatches = [r for r in filtered if r.get("is_match") is False or r.get("is_excluded") is True]
+        if not mismatches:
+            # If all active have been reconciled, show records with diffs/user edits so user can review/edit
+            mismatches = [r for r in filtered if r.get("diff_fields") or r.get("user_edited_cols") or r.get("is_excluded")]
+        filtered = mismatches
     elif filter_type == "match":
         filtered = [r for r in filtered if not r.get("is_excluded") and r.get("is_match") is True]
     elif filter_type == "excluded":
@@ -340,6 +344,13 @@ async def get_category_grid(
     total_count = len(filtered)
     offset = (page - 1) * page_size
     paginated_recs = filtered[offset: offset + page_size]
+
+    for r in paginated_recs:
+        aid, emp_id, emp_name, dept, sn = comparator._get_key_fields(category, r.get("cells", {}))
+        r["it_emp_id"] = emp_id
+        r["it_emp_name"] = emp_name
+        r["it_dept"] = dept
+        r["it_sn"] = sn
 
     return JSONResponse({
         "category": category,
@@ -567,3 +578,48 @@ async def export_all_inventories_zip():
     except Exception as e:
         logger.error(f"Error exporting all inventories zip: {e}", component="EXPORT", exc_info=True)
         raise HTTPException(status_code=500, detail=f"เกิดข้อผิดพลาดในการสร้างไฟล์ ZIP: {str(e)}")
+
+@app.get("/api/export/mismatch/{category}")
+async def export_mismatch_report_file(category: str):
+    """Download dedicated Mismatch Report Excel file (e.g. HW_Mismatch_Report.xlsx)."""
+    if category not in ("hw", "sw", "ups"):
+        raise HTTPException(status_code=400, detail="Category must be hw, sw, or ups")
+
+    if comparator.category_states.get(category) != "compared":
+        raise HTTPException(status_code=409, detail=f"กรุณากดเปรียบเทียบหมวด {category.upper()} ก่อนทำการดาวน์โหลดไฟล์ Mismatch Report")
+
+    try:
+        buf = ReportGenerator.generate_mismatch_report_bytes(comparator, category)
+        name_map = {
+            "hw": "HW_Mismatch_Report.xlsx",
+            "sw": "SW_Mismatch_Report.xlsx",
+            "ups": "UPS_Mismatch_Report.xlsx"
+        }
+        filename = name_map[category]
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        logger.error(f"Error exporting mismatch report ({category}): {e}", component="EXPORT", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"เกิดข้อผิดพลาดในการสร้างไฟล์ Mismatch Report: {str(e)}")
+
+@app.get("/api/export/mismatch-all")
+async def export_all_mismatch_report_file():
+    """Download combined Mismatch Report Excel file across all categories."""
+    any_compared = any(state == "compared" for state in comparator.category_states.values())
+    if not any_compared:
+        raise HTTPException(status_code=409, detail="ยังไม่มีหมวดหมู่ที่เปรียบเทียบแล้ว กรุณากดเปรียบเทียบอย่างน้อย 1 หมวดหมู่")
+
+    try:
+        buf = ReportGenerator.generate_mismatch_report_bytes(comparator, "all")
+        filename = "All_Mismatch_Report.xlsx"
+        return StreamingResponse(
+            buf,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        logger.error(f"Error exporting all mismatch report: {e}", component="EXPORT", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"เกิดข้อผิดพลาดในการสร้างไฟล์ Mismatch Report รวม: {str(e)}")

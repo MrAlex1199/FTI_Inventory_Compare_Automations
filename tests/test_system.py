@@ -173,6 +173,21 @@ def test_manual_compare_and_spreadsheet_workflow():
             assert ws3.cell(2, col_idx).value == new_val, f"Expected custom val in Tab 3 Excel cell, got {ws3.cell(2, col_idx).value}"
             print("    Tab 3 Excel export verified: contains user-edited cell value.")
 
+    # 8.1 Test Dedicated Mismatch Report Exports
+    print("[9.1] Testing Dedicated Mismatch Report Exports...")
+    for cat in ("hw", "sw", "ups"):
+        res_mism = client.get(f"/api/export/mismatch/{cat}")
+        assert res_mism.status_code == 200
+        wb_mism = openpyxl.load_workbook(io.BytesIO(res_mism.content))
+        assert "สรุป" in wb_mism.sheetnames
+        print(f"    Mismatch report for {cat.upper()} verified: sheets={wb_mism.sheetnames}")
+
+    res_mism_all = client.get("/api/export/mismatch-all")
+    assert res_mism_all.status_code == 200
+    wb_mism_all = openpyxl.load_workbook(io.BytesIO(res_mism_all.content))
+    assert "สรุป" in wb_mism_all.sheetnames
+    print("    All Mismatch Report verified successfully.")
+
     # 9. Test Stale State on Master Reload
     print("[10] Testing Stale state when Master ERP is reloaded...")
     client.post("/api/upload", data={"file_type": "master"}, files={"file": ("0-FTI_asset_HWSWOth.xlsx", open(base_master, "rb"), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")})

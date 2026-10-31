@@ -195,11 +195,22 @@
                             <button class="btn btn-action-green btn-autofix" id="btn-run-autofix">
                                 <i class="fa-solid fa-bolt"></i> 1-Click Auto-Fix
                             </button>
-                            <a href="#" target="_blank" class="btn btn-secondary btn-export-cat" id="btn-export-category">
-                                <i class="fa-solid fa-download"></i> ดาวน์โหลดผลลัพธ์ (4 แท็บ)
+                            <a href="#" target="_blank" class="btn btn-danger btn-export-mismatch" id="btn-export-mismatch" style="display: none;">
+                                <i class="fa-solid fa-file-excel"></i> ดาวน์โหลด Mismatch Report (.xlsx)
+                            </a>
+                            <a href="#" target="_blank" class="btn btn-secondary btn-export-cat" id="btn-export-category" style="display: none;">
+                                <i class="fa-solid fa-file-circle-check text-green"></i> ดาวน์โหลดผลลัพธ์ (4 แท็บ)
                             </a>
                         </div>
                         <div class="action-bar-right">
+                            <div class="view-mode-toggle" id="view-mode-toggle">
+                                <button class="btn-toggle-view active" id="btn-mode-mismatch" data-mode="mismatch" title="มุมมองชี้จุดต่าง IT vs ERP ชัดเจน">
+                                    <i class="fa-solid fa-code-compare"></i> Mismatch Inspector
+                                </button>
+                                <button class="btn-toggle-view" id="btn-mode-spreadsheet" data-mode="spreadsheet" title="มุมมองตารางเต็มทุกคอลัมน์">
+                                    <i class="fa-solid fa-table-cells"></i> Spreadsheet Grid
+                                </button>
+                            </div>
                             <div class="status-indicator-badge" id="workspace-status-badge">
                                 รอการเปรียบเทียบ
                             </div>
@@ -353,12 +364,15 @@
                 <div class="view-panel" id="view-summary">
                     <div class="panel-header-banner">
                         <div>
-                            <h3><i class="fa-solid fa-chart-pie"></i> สรุปภาพรวมและดาวน์โหลดผลลัพธ์ (4 แท็บ)</h3>
-                            <p>ดาวน์โหลดไฟล์ผลลัพธ์แยกตามหมวดหมู่ หรือดาวน์โหลดเป็น ZIP ไฟล์เดียวครบทั้ง 3 หมวด</p>
+                            <h3><i class="fa-solid fa-chart-pie"></i> สรุปภาพรวมและศูนย์ดาวน์โหลดรายงาน</h3>
+                            <p>ดาวน์โหลดรายงาน Mismatch ชี้จุดต่าง หรือไฟล์ฐานข้อมูลผลลัพธ์ครบ 4 แท็บ ทั้งแบบรายหมวดและแบบรวมไฟล์</p>
                         </div>
-                        <div>
+                        <div style="display: flex; gap: 10px;">
+                            <a href="/api/export/mismatch-all" target="_blank" class="btn btn-danger btn-lg">
+                                <i class="fa-solid fa-file-excel"></i> ดาวน์โหลด All_Mismatch_Report (.xlsx)
+                            </a>
                             <a href="/api/export/inventory-all" target="_blank" class="btn btn-action-green btn-lg">
-                                <i class="fa-solid fa-file-zipper"></i> ดาวน์โหลดรวมทั้ง 3 ไฟล์ (.zip)
+                                <i class="fa-solid fa-file-zipper"></i> ดาวน์โหลดผลลัพธ์ครบทั้ง 3 ไฟล์ (.zip)
                             </a>
                         </div>
                     </div>
@@ -376,9 +390,14 @@
                                 <div><span>พบจุดต่าง:</span> <strong class="text-red" id="sum-mismatched-hw">0</strong></div>
                                 <div><span>ตัดออก (แท็บ 4):</span> <strong class="text-amber" id="sum-excluded-hw">0</strong></div>
                             </div>
-                            <a href="/api/export/inventory/hw" target="_blank" class="btn btn-secondary btn-block" id="btn-sum-dl-hw">
-                                <i class="fa-solid fa-download"></i> ดาวน์โหลด 1-it_asset_HW.xlsx
-                            </a>
+                            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                                <a href="/api/export/mismatch/hw" target="_blank" class="btn btn-outline-danger btn-block" id="btn-sum-dl-mismatch-hw">
+                                    <i class="fa-solid fa-file-excel"></i> รายงาน HW_Mismatch_Report.xlsx
+                                </a>
+                                <a href="/api/export/inventory/hw" target="_blank" class="btn btn-secondary btn-block" id="btn-sum-dl-hw">
+                                    <i class="fa-solid fa-file-circle-check text-green"></i> ผลลัพธ์ 1-it_asset_HW.xlsx (4 แท็บ)
+                                </a>
+                            </div>
                         </div>
 
                         <!-- SW Summary -->
@@ -393,9 +412,14 @@
                                 <div><span>พบจุดต่าง:</span> <strong class="text-red" id="sum-mismatched-sw">0</strong></div>
                                 <div><span>ตัดออก (แท็บ 4):</span> <strong class="text-amber" id="sum-excluded-sw">0</strong></div>
                             </div>
-                            <a href="/api/export/inventory/sw" target="_blank" class="btn btn-secondary btn-block" id="btn-sum-dl-sw">
-                                <i class="fa-solid fa-download"></i> ดาวน์โหลด 2-it_asset_SW.xlsx
-                            </a>
+                            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                                <a href="/api/export/mismatch/sw" target="_blank" class="btn btn-outline-danger btn-block" id="btn-sum-dl-mismatch-sw">
+                                    <i class="fa-solid fa-file-excel"></i> รายงาน SW_Mismatch_Report.xlsx
+                                </a>
+                                <a href="/api/export/inventory/sw" target="_blank" class="btn btn-secondary btn-block" id="btn-sum-dl-sw">
+                                    <i class="fa-solid fa-file-circle-check text-green"></i> ผลลัพธ์ 2-it_asset_SW.xlsx (4 แท็บ)
+                                </a>
+                            </div>
                         </div>
 
                         <!-- UPS Summary -->
@@ -410,9 +434,14 @@
                                 <div><span>พบจุดต่าง:</span> <strong class="text-red" id="sum-mismatched-ups">0</strong></div>
                                 <div><span>ตัดออก (แท็บ 4):</span> <strong class="text-amber" id="sum-excluded-ups">0</strong></div>
                             </div>
-                            <a href="/api/export/inventory/ups" target="_blank" class="btn btn-secondary btn-block" id="btn-sum-dl-ups">
-                                <i class="fa-solid fa-download"></i> ดาวน์โหลด 3-it_asset_UPS_Monitor.xlsx
-                            </a>
+                            <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px;">
+                                <a href="/api/export/mismatch/ups" target="_blank" class="btn btn-outline-danger btn-block" id="btn-sum-dl-mismatch-ups">
+                                    <i class="fa-solid fa-file-excel"></i> รายงาน UPS_Mismatch_Report.xlsx
+                                </a>
+                                <a href="/api/export/inventory/ups" target="_blank" class="btn btn-secondary btn-block" id="btn-sum-dl-ups">
+                                    <i class="fa-solid fa-file-circle-check text-green"></i> ผลลัพธ์ 3-it_asset_UPS_Monitor.xlsx (4 แท็บ)
+                                </a>
+                            </div>
                         </div>
                     </div>
                 </div>
