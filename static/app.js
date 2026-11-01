@@ -305,6 +305,90 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+    // Direct Compare Buttons on Cards
+    document.querySelectorAll(".btn-card-compare").forEach(btn => {
+        btn.addEventListener("click", async (e) => {
+            e.stopPropagation();
+            const cat = btn.getAttribute("data-cat");
+            if (!cat) return;
+            btn.disabled = true;
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> เทียบ...';
+            try {
+                const res = await fetch(`/api/compare/${cat}`, { method: "POST" });
+                const d = await res.json();
+                if (!res.ok) throw new Error(d.detail || "การเปรียบเทียบล้มเหลว");
+                showToast(`เปรียบเทียบหมวด ${cat.toUpperCase()} สำเร็จ (ตรงกัน ${d.match_rate}%)`, "success");
+                await fetchSystemState();
+            } catch (err) {
+                showToast(`เกิดข้อผิดพลาด: ${err.message}`, "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        });
+    });
+
+    // Executive Dashboard Quick Action Buttons
+    async function runCompareAll() {
+        const btnBanner = document.getElementById("btn-banner-compare-all");
+        const btnDeck = document.getElementById("btn-exec-compare-all");
+        if (btnBanner) { btnBanner.disabled = true; btnBanner.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังเปรียบเทียบ...'; }
+        if (btnDeck) { btnDeck.disabled = true; }
+
+        showToast("กำลังเริ่มเปรียบเทียบข้อมูลทุกหมวดหมู่ (HW, SW, UPS)...", "info");
+
+        try {
+            const categories = ["hw", "sw", "ups"];
+            for (const cat of categories) {
+                try {
+                    await fetch(`/api/compare/${cat}`, { method: "POST" });
+                } catch (e) {
+                    console.warn(`Compare failed for ${cat}:`, e);
+                }
+            }
+            showToast("เปรียบเทียบข้อมูลครบทั้ง 3 หมวดหมู่เรียบร้อยแล้ว!", "success");
+            await fetchSystemState();
+        } catch (err) {
+            showToast(`เกิดข้อผิดพลาดในการเปรียบเทียบ: ${err.message}`, "error");
+        } finally {
+            if (btnBanner) { btnBanner.disabled = false; btnBanner.innerHTML = '<i class="fa-solid fa-bolt"></i> เปรียบเทียบทุกหมวดหมู่อัตโนมัติ'; }
+            if (btnDeck) { btnDeck.disabled = false; }
+        }
+    }
+
+    const btnBannerCompareAll = document.getElementById("btn-banner-compare-all");
+    if (btnBannerCompareAll) btnBannerCompareAll.addEventListener("click", runCompareAll);
+
+    const btnExecCompareAll = document.getElementById("btn-exec-compare-all");
+    if (btnExecCompareAll) btnExecCompareAll.addEventListener("click", runCompareAll);
+
+    const btnExecAutoFixAll = document.getElementById("btn-exec-autofix-all");
+    if (btnExecAutoFixAll) {
+        btnExecAutoFixAll.addEventListener("click", async () => {
+            btnExecAutoFixAll.disabled = true;
+            showToast("กำลังประมวลผล 1-Click Auto-Fix ทุกหมวดหมู่...", "info");
+            try {
+                const res = await fetch("/api/auto-fix/all", { method: "POST" });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail);
+                showToast("1-Click Auto-Fix สำเร็จสมบูรณ์ 100% ทุกหมวดหมู่!", "success");
+                await fetchSystemState();
+            } catch (err) {
+                showToast(`Auto-Fix ล้มเหลว: ${err.message}`, "error");
+            } finally {
+                btnExecAutoFixAll.disabled = false;
+            }
+        });
+    }
+
+    const btnExecDownloadAll = document.getElementById("btn-exec-download-all");
+    if (btnExecDownloadAll) {
+        btnExecDownloadAll.addEventListener("click", () => {
+            switchView("summary");
+        });
+    }
+
     // =========================================================================
     // State Synchronization
     // =========================================================================
@@ -359,6 +443,40 @@ document.addEventListener("DOMContentLoaded", () => {
         updateCard("sw", elements.filebadgeSw, elements.filenameSw);
         updateCard("ups", elements.filebadgeUps, elements.filenameUps);
 
+        // Update Card Row Counts and Metric Subtitles
+        const rowsMaster = document.getElementById("file-rows-master");
+        const rowsHw = document.getElementById("file-rows-hw");
+        const rowsSw = document.getElementById("file-rows-sw");
+        const rowsUps = document.getElementById("file-rows-ups");
+
+        if (rowsMaster) rowsMaster.textContent = (files.master && files.master.rows ? files.master.rows.toLocaleString() : "0");
+        if (rowsHw) rowsHw.textContent = (files.hw && files.hw.rows ? files.hw.rows.toLocaleString() : "0");
+        if (rowsSw) rowsSw.textContent = (files.sw && files.sw.rows ? files.sw.rows.toLocaleString() : "0");
+        if (rowsUps) rowsUps.textContent = (files.ups && files.ups.rows ? files.ups.rows.toLocaleString() : "0");
+
+        const updateStatusDetail = (cat, elId) => {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            const st = states[cat];
+            const sum = (data.summary && data.summary[cat]) || {};
+            if (st === "compared") {
+                const rate = sum.match_rate || 0;
+                el.textContent = `เทียบแล้ว ${rate.toFixed(1)}% (ตรง ${sum.matched || 0} | ต่าง ${sum.mismatches || 0})`;
+            } else if (st === "stale") {
+                el.textContent = "ไฟล์ Master เปลี่ยน รอเทียบใหม่";
+            } else if (files[cat] && files[cat].loaded) {
+                el.textContent = "พร้อมเริ่มการเปรียบเทียบ";
+            } else {
+                el.textContent = "รอไฟล์ข้อมูล";
+            }
+        };
+        updateStatusDetail("hw", "file-status-detail-hw");
+        updateStatusDetail("sw", "file-status-detail-sw");
+        updateStatusDetail("ups", "file-status-detail-ups");
+
+        // Executive Dashboard KPI & Stepper Calculation
+        updateExecutiveDashboard(data);
+
         // Undo/Redo tools
         elements.btnUndo.disabled = !data.can_undo;
         elements.btnRedo.disabled = !data.can_redo;
@@ -366,6 +484,104 @@ document.addEventListener("DOMContentLoaded", () => {
         // If in category view, update action bar
         if (["hw", "sw", "ups"].includes(state.currentView)) {
             updateWorkspaceControls(state.activeCategory);
+        }
+    }
+
+    // =========================================================================
+    // Executive Dashboard (Bento KPIs & Workflow Stepper)
+    // =========================================================================
+    function updateExecutiveDashboard(data) {
+        const summary = data.summary || {};
+        const states = data.category_states || {};
+        const files = data.files || {};
+
+        let totalRecords = 0;
+        let totalMatched = 0;
+        let totalMismatches = 0;
+        let totalExcluded = 0;
+        let totalUserEdited = 0;
+
+        ["hw", "sw", "ups"].forEach(cat => {
+            const s = summary[cat];
+            if (s) {
+                totalRecords += (s.total_records || 0);
+                totalMatched += (s.matched || 0);
+                totalMismatches += (s.mismatches || 0);
+                totalExcluded += (s.excluded || 0);
+                totalUserEdited += (s.user_edited || 0);
+            } else if (files[cat] && files[cat].rows) {
+                totalRecords += files[cat].rows;
+            }
+        });
+
+        const activeTotal = totalMatched + totalMismatches;
+        const overallRate = activeTotal > 0 ? ((totalMatched / activeTotal) * 100) : 0;
+
+        const elTotal = document.getElementById("exec-kpi-total");
+        const elRate = document.getElementById("exec-kpi-rate");
+        const elBar = document.getElementById("exec-kpi-bar");
+        const elMatchedCount = document.getElementById("exec-kpi-matched-count");
+        const elMismatch = document.getElementById("exec-kpi-mismatch");
+        const elFixed = document.getElementById("exec-kpi-fixed");
+
+        if (elTotal) elTotal.textContent = totalRecords.toLocaleString();
+        if (elRate) elRate.textContent = `${overallRate.toFixed(1)}%`;
+        if (elBar) elBar.style.width = `${Math.min(100, Math.max(0, overallRate))}%`;
+        if (elMatchedCount) elMatchedCount.textContent = `ตรงกัน ${totalMatched.toLocaleString()} จาก ${activeTotal.toLocaleString()} รายการ`;
+        if (elMismatch) elMismatch.textContent = totalMismatches.toLocaleString();
+        if (elFixed) elFixed.textContent = (totalExcluded + totalUserEdited).toLocaleString();
+
+        // Update Stepper Progress
+        const isMasterLoaded = files.master && files.master.loaded;
+        const isAllCatsLoaded = ["hw", "sw", "ups"].every(c => files[c] && files[c].loaded);
+        const isAnyCompared = ["hw", "sw", "ups"].some(c => states[c] === "compared");
+        const isAllCompared = ["hw", "sw", "ups"].every(c => states[c] === "compared");
+
+        const step1 = document.getElementById("workflow-step-1");
+        const step2 = document.getElementById("workflow-step-2");
+        const step3 = document.getElementById("workflow-step-3");
+        const chip1 = document.getElementById("step-1-chip");
+        const chip2 = document.getElementById("step-2-chip");
+        const chip3 = document.getElementById("step-3-chip");
+
+        if (step1 && chip1) {
+            if (isMasterLoaded && isAllCatsLoaded) {
+                step1.className = "stepper-step completed";
+                chip1.className = "step-status-chip chip-done";
+                chip1.textContent = "เสร็จสิ้น";
+            } else {
+                step1.className = "stepper-step active";
+                chip1.className = "step-status-chip chip-active";
+                chip1.textContent = "กำลังโหลดไฟล์";
+            }
+        }
+
+        if (step2 && chip2) {
+            if (isAllCompared) {
+                step2.className = "stepper-step completed";
+                chip2.className = "step-status-chip chip-done";
+                chip2.textContent = overallRate >= 99.9 ? "ตรงกัน 100%" : "เปรียบเทียบครบแล้ว";
+            } else if (isAnyCompared) {
+                step2.className = "stepper-step active";
+                chip2.className = "step-status-chip chip-active";
+                chip2.textContent = "เปรียบเทียบไปแล้วบางหมวด";
+            } else {
+                step2.className = "stepper-step";
+                chip2.className = "step-status-chip chip-pending";
+                chip2.textContent = "รอดำเนินการ";
+            }
+        }
+
+        if (step3 && chip3) {
+            if (isAllCompared) {
+                step3.className = "stepper-step active";
+                chip3.className = "step-status-chip chip-active";
+                chip3.textContent = "พร้อมส่งออกผลลัพธ์";
+            } else {
+                step3.className = "stepper-step";
+                chip3.className = "step-status-chip chip-pending";
+                chip3.textContent = "รอขั้นตอนที่ 2";
+            }
         }
     }
 

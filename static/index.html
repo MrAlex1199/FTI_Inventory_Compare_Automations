@@ -117,77 +117,254 @@
 
             <!-- Views Container -->
             <main class="app-content-body">
-                <!-- VIEW 1: Files Ingestion View -->
+                <!-- VIEW 1: Files Ingestion & Executive Dashboard View -->
                 <div class="view-panel active" id="view-files">
                     <div class="panel-header-banner">
-                        <div>
-                            <h3><i class="fa-solid fa-folder-open"></i> ไฟล์ข้อมูลและสถานะการเปรียบเทียบ</h3>
-                            <p>เมื่อเพิ่มไฟล์ระบบจะยังไม่เปรียบเทียบทันที ท่านสามารถเลือกกดเปรียบเทียบในแต่ละหมวดหมู่ได้อย่างอิสระ</p>
+                        <div class="banner-text">
+                            <h3><i class="fa-solid fa-layer-group"></i> ศูนย์จัดการข้อมูลและเปรียบเทียบสินทรัพย์ (Asset Hub)</h3>
+                            <p>ตรวจสอบความพร้อมของไฟล์ ERP Master และไฟล์ IT Inventory ทั้ง 3 หมวดหมู่ พร้อมประมวลผลเปรียบเทียบได้อย่างอิสระ</p>
+                        </div>
+                        <div class="banner-quick-actions">
+                            <button class="btn btn-primary" id="btn-banner-compare-all">
+                                <i class="fa-solid fa-bolt"></i> เปรียบเทียบทุกหมวดหมู่อัตโนมัติ
+                            </button>
                         </div>
                     </div>
 
+                    <!-- Modern Bento File Cards Grid -->
                     <div class="files-grid">
                         <!-- Master Card -->
                         <div class="file-card file-master" id="dropzone-master" data-filetype="master">
                             <div class="file-card-top">
-                                <span class="tag-master"><i class="fa-solid fa-database"></i> ไฟล์หลัก ERP (Master)</span>
+                                <span class="tag-cat tag-master"><i class="fa-solid fa-database"></i> ไฟล์หลัก ERP (Master)</span>
                                 <span class="file-badge badge-empty" id="filebadge-master">รอไฟล์</span>
                             </div>
                             <div class="file-title" id="filename-master">0-FTI_asset_HWSWOth.xlsx</div>
+                            <div class="file-metrics-row">
+                                <span class="file-metric"><i class="fa-solid fa-list-check"></i> <strong id="file-rows-master">0</strong> รายการ ERP</span>
+                                <span class="file-metric-badge tag-master">ฐานข้อมูลหลัก</span>
+                            </div>
                             <div class="file-sub" id="filemeta-master">ข้อมูลสินทรัพย์หลักจากระบบ ERP (AX)</div>
-                            <div class="drop-hint"><i class="fa-solid fa-cloud-arrow-up"></i> ลากไฟล์มาวาง หรือคลิกเพื่อเปลี่ยนไฟล์</div>
+                            <div class="file-action-row">
+                                <button class="btn btn-secondary btn-sm btn-reupload-card" onclick="document.getElementById('file-input-master').click();">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i> เปลี่ยนไฟล์ ERP
+                                </button>
+                            </div>
+                            <div class="drop-hint"><i class="fa-solid fa-arrow-up-from-bracket"></i> ลากไฟล์มาวาง หรือคลิกเปลี่ยนไฟล์</div>
                             <input type="file" id="file-input-master" accept=".xlsx,.xls" hidden>
                         </div>
 
                         <!-- HW Card -->
-                        <div class="file-card" id="dropzone-hw" data-filetype="hw">
+                        <div class="file-card file-hw-theme" id="dropzone-hw" data-filetype="hw">
                             <div class="file-card-top">
                                 <span class="tag-cat tag-hw"><i class="fa-solid fa-desktop"></i> Hardware</span>
                                 <span class="file-badge badge-empty" id="filebadge-hw">รอไฟล์</span>
                             </div>
                             <div class="file-title" id="filename-hw">1-it_asset_HW.xlsx</div>
+                            <div class="file-metrics-row">
+                                <span class="file-metric"><i class="fa-solid fa-laptop"></i> <strong id="file-rows-hw">0</strong> รายการ</span>
+                                <span class="file-metric-sub" id="file-status-detail-hw">รอเริ่มการเปรียบเทียบ</span>
+                            </div>
                             <div class="file-sub" id="filemeta-hw">คอมพิวเตอร์ PC, Notebook และอุปกรณ์ HW</div>
                             <div class="file-action-row">
-                                <button class="btn btn-primary btn-sm btn-nav-to-cat" data-goto="hw">
-                                    <i class="fa-solid fa-arrow-right"></i> เปิดหน้า Hardware
+                                <button class="btn btn-primary btn-sm btn-card-compare" data-cat="hw" id="btn-card-compare-hw" title="กดเพื่อเริ่มเปรียบเทียบหมวด Hardware ทันที">
+                                    <i class="fa-solid fa-play"></i> เปรียบเทียบ
+                                </button>
+                                <button class="btn btn-secondary btn-sm btn-nav-to-cat" data-goto="hw">
+                                    <i class="fa-solid fa-arrow-right"></i> เปิดดูข้อมูล
                                 </button>
                             </div>
-                            <div class="drop-hint"><i class="fa-solid fa-cloud-arrow-up"></i> ลากไฟล์มาวาง หรือคลิกเพื่อเปลี่ยนไฟล์</div>
+                            <div class="drop-hint"><i class="fa-solid fa-arrow-up-from-bracket"></i> ลากไฟล์มาวาง หรือคลิกเปลี่ยนไฟล์</div>
                             <input type="file" id="file-input-hw" accept=".xlsx,.xls" hidden>
                         </div>
 
                         <!-- SW Card -->
-                        <div class="file-card" id="dropzone-sw" data-filetype="sw">
+                        <div class="file-card file-sw-theme" id="dropzone-sw" data-filetype="sw">
                             <div class="file-card-top">
                                 <span class="tag-cat tag-sw"><i class="fa-solid fa-code"></i> Software</span>
                                 <span class="file-badge badge-empty" id="filebadge-sw">รอไฟล์</span>
                             </div>
                             <div class="file-title" id="filename-sw">2-it_asset_SW.xlsx</div>
+                            <div class="file-metrics-row">
+                                <span class="file-metric"><i class="fa-solid fa-code"></i> <strong id="file-rows-sw">0</strong> รายการ</span>
+                                <span class="file-metric-sub" id="file-status-detail-sw">รอเริ่มการเปรียบเทียบ</span>
+                            </div>
                             <div class="file-sub" id="filemeta-sw">โปรแกรมคอมพิวเตอร์และ License ลิขสิทธิ์</div>
                             <div class="file-action-row">
-                                <button class="btn btn-primary btn-sm btn-nav-to-cat" data-goto="sw">
-                                    <i class="fa-solid fa-arrow-right"></i> เปิดหน้า Software
+                                <button class="btn btn-primary btn-sm btn-card-compare" data-cat="sw" id="btn-card-compare-sw" title="กดเพื่อเริ่มเปรียบเทียบหมวด Software ทันที">
+                                    <i class="fa-solid fa-play"></i> เปรียบเทียบ
+                                </button>
+                                <button class="btn btn-secondary btn-sm btn-nav-to-cat" data-goto="sw">
+                                    <i class="fa-solid fa-arrow-right"></i> เปิดดูข้อมูล
                                 </button>
                             </div>
-                            <div class="drop-hint"><i class="fa-solid fa-cloud-arrow-up"></i> ลากไฟล์มาวาง หรือคลิกเพื่อเปลี่ยนไฟล์</div>
+                            <div class="drop-hint"><i class="fa-solid fa-arrow-up-from-bracket"></i> ลากไฟล์มาวาง หรือคลิกเปลี่ยนไฟล์</div>
                             <input type="file" id="file-input-sw" accept=".xlsx,.xls" hidden>
                         </div>
 
                         <!-- UPS Card -->
-                        <div class="file-card" id="dropzone-ups" data-filetype="ups">
+                        <div class="file-card file-ups-theme" id="dropzone-ups" data-filetype="ups">
                             <div class="file-card-top">
                                 <span class="tag-cat tag-ups"><i class="fa-solid fa-car-battery"></i> UPS & Monitor</span>
                                 <span class="file-badge badge-empty" id="filebadge-ups">รอไฟล์</span>
                             </div>
                             <div class="file-title" id="filename-ups">3-it_asset_UPS_Monitor.xlsx</div>
+                            <div class="file-metrics-row">
+                                <span class="file-metric"><i class="fa-solid fa-car-battery"></i> <strong id="file-rows-ups">0</strong> รายการ</span>
+                                <span class="file-metric-sub" id="file-status-detail-ups">รอเริ่มการเปรียบเทียบ</span>
+                            </div>
                             <div class="file-sub" id="filemeta-ups">เครื่องสำรองไฟและหน้าจอคอมพิวเตอร์</div>
                             <div class="file-action-row">
-                                <button class="btn btn-primary btn-sm btn-nav-to-cat" data-goto="ups">
-                                    <i class="fa-solid fa-arrow-right"></i> เปิดหน้า UPS & Monitor
+                                <button class="btn btn-primary btn-sm btn-card-compare" data-cat="ups" id="btn-card-compare-ups" title="กดเพื่อเริ่มเปรียบเทียบหมวด UPS & Monitor ทันที">
+                                    <i class="fa-solid fa-play"></i> เปรียบเทียบ
+                                </button>
+                                <button class="btn btn-secondary btn-sm btn-nav-to-cat" data-goto="ups">
+                                    <i class="fa-solid fa-arrow-right"></i> เปิดดูข้อมูล
                                 </button>
                             </div>
-                            <div class="drop-hint"><i class="fa-solid fa-cloud-arrow-up"></i> ลากไฟล์มาวาง หรือคลิกเพื่อเปลี่ยนไฟล์</div>
+                            <div class="drop-hint"><i class="fa-solid fa-arrow-up-from-bracket"></i> ลากไฟล์มาวาง หรือคลิกเปลี่ยนไฟล์</div>
                             <input type="file" id="file-input-ups" accept=".xlsx,.xls" hidden>
+                        </div>
+                    </div>
+
+                    <!-- Executive Command Dashboard (Bento Stats & Quick Action Center) -->
+                    <div class="executive-dashboard" id="executive-dashboard">
+                        <!-- Bento KPI Cards (4 Key Metrics) -->
+                        <div class="exec-kpi-grid">
+                            <div class="exec-kpi-card">
+                                <div class="exec-kpi-header">
+                                    <span class="exec-kpi-title">สินทรัพย์ทั้งหมดที่ตรวจพบ</span>
+                                    <div class="exec-kpi-icon-wrap bg-blue-subtle text-blue">
+                                        <i class="fa-solid fa-cubes"></i>
+                                    </div>
+                                </div>
+                                <div class="exec-kpi-val" id="exec-kpi-total">0</div>
+                                <div class="exec-kpi-footer">
+                                    <span class="text-secondary">รวมทุกหมวดหมู่ (HW / SW / UPS)</span>
+                                </div>
+                            </div>
+
+                            <div class="exec-kpi-card">
+                                <div class="exec-kpi-header">
+                                    <span class="exec-kpi-title">อัตราความตรงกันรวม</span>
+                                    <div class="exec-kpi-icon-wrap bg-green-subtle text-green">
+                                        <i class="fa-solid fa-circle-check"></i>
+                                    </div>
+                                </div>
+                                <div class="exec-kpi-val text-green" id="exec-kpi-rate">0.0%</div>
+                                <div class="exec-progress-track">
+                                    <div class="exec-progress-bar" id="exec-kpi-bar" style="width: 0%;"></div>
+                                </div>
+                                <div class="exec-kpi-footer">
+                                    <span class="text-secondary" id="exec-kpi-matched-count">ตรงกัน 0 รายการ</span>
+                                </div>
+                            </div>
+
+                            <div class="exec-kpi-card">
+                                <div class="exec-kpi-header">
+                                    <span class="exec-kpi-title">จุดต่างที่รอตรวจสอบ (Mismatch)</span>
+                                    <div class="exec-kpi-icon-wrap bg-amber-subtle text-amber">
+                                        <i class="fa-solid fa-triangle-exclamation"></i>
+                                    </div>
+                                </div>
+                                <div class="exec-kpi-val text-amber" id="exec-kpi-mismatch">0</div>
+                                <div class="exec-kpi-footer">
+                                    <span class="text-secondary">ข้อมูลไม่ตรง หรือไม่พบใน ERP AX</span>
+                                </div>
+                            </div>
+
+                            <div class="exec-kpi-card">
+                                <div class="exec-kpi-header">
+                                    <span class="exec-kpi-title">ตัดออก / ซิงค์ข้อมูลแล้ว</span>
+                                    <div class="exec-kpi-icon-wrap bg-cyan-subtle text-cyan">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                    </div>
+                                </div>
+                                <div class="exec-kpi-val text-cyan" id="exec-kpi-fixed">0</div>
+                                <div class="exec-kpi-footer">
+                                    <span class="text-secondary">ตัดจำหน่ายใน ERP หรือผู้ใช้แก้ไขแล้ว</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lower Control Deck: Quick Actions & Workflow Stepper -->
+                        <div class="exec-deck-grid">
+                            <!-- Quick Action Center -->
+                            <div class="exec-action-deck">
+                                <div class="deck-header">
+                                    <h4 class="deck-title"><i class="fa-solid fa-bolt text-amber"></i> ศูนย์ดำเนินการด่วน (Quick Action Center)</h4>
+                                    <span class="deck-desc">สั่งประมวลผล เปรียบเทียบ หรือซิงค์ข้อมูลทุกหมวดหมู่ได้ทันทีในคลิกเดียว</span>
+                                </div>
+                                <div class="deck-action-buttons">
+                                    <button class="btn btn-primary btn-deck-action" id="btn-exec-compare-all">
+                                        <i class="fa-solid fa-bolt"></i>
+                                        <div class="deck-btn-content">
+                                            <strong>เปรียบเทียบข้อมูลทุกหมวดหมู่ (Compare All)</strong>
+                                            <span>เริ่มจับคู่ข้อมูลกับ ERP AX ทั้ง HW, SW และ UPS พร้อมกัน</span>
+                                        </div>
+                                    </button>
+                                    <button class="btn btn-action-green btn-deck-action" id="btn-exec-autofix-all">
+                                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                                        <div class="deck-btn-content">
+                                            <strong>1-Click Auto-Fix สู่ 100% ทุกหมวด</strong>
+                                            <span>ย้ายรายการตัดจำหน่ายลงแท็บ 4 และซิงค์ชื่อให้ตรงกันสมบูรณ์</span>
+                                        </div>
+                                    </button>
+                                    <button class="btn btn-secondary btn-deck-action" id="btn-exec-download-all">
+                                        <i class="fa-solid fa-chart-pie text-green"></i>
+                                        <div class="deck-btn-content">
+                                            <strong>เปิดศูนย์ส่งออกรายงาน (Export Center)</strong>
+                                            <span>ดาวน์โหลด Excel 4 แท็บแยกหมวดหมู่ หรือ Mismatch Report รวม</span>
+                                        </div>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Workflow Progress Stepper -->
+                            <div class="exec-stepper-deck">
+                                <div class="deck-header">
+                                    <h4 class="deck-title"><i class="fa-solid fa-route text-blue"></i> ขั้นตอนการทำงาน (Reconciliation Workflow)</h4>
+                                    <span class="deck-desc">ติดตามความคืบหน้าการทำงานตั้งแต่ต้นจนส่งออกข้อมูลสมบูรณ์</span>
+                                </div>
+                                <div class="workflow-stepper">
+                                    <div class="stepper-step" id="workflow-step-1">
+                                        <div class="step-indicator">
+                                            <i class="fa-solid fa-check step-icon"></i>
+                                        </div>
+                                        <div class="step-details">
+                                            <div class="step-title">1. ตรวจสอบไฟล์ข้อมูล (Data Ingestion)</div>
+                                            <div class="step-desc" id="step-1-desc">ตรวจพบไฟล์ ERP Master และไฟล์ IT Inventory</div>
+                                        </div>
+                                        <span class="step-status-chip chip-done" id="step-1-chip">เสร็จสิ้น</span>
+                                    </div>
+
+                                    <div class="stepper-connector" id="connector-1-2"></div>
+
+                                    <div class="stepper-step" id="workflow-step-2">
+                                        <div class="step-indicator">
+                                            <i class="fa-solid fa-play step-icon"></i>
+                                        </div>
+                                        <div class="step-details">
+                                            <div class="step-title">2. เปรียบเทียบและแก้ไขจุดต่าง (Reconcile & Diff)</div>
+                                            <div class="step-desc" id="step-2-desc">กดเปรียบเทียบรายหมวด หรือใช้ 1-Click Auto-Fix</div>
+                                        </div>
+                                        <span class="step-status-chip chip-pending" id="step-2-chip">รอดำเนินการ</span>
+                                    </div>
+
+                                    <div class="stepper-connector" id="connector-2-3"></div>
+
+                                    <div class="stepper-step" id="workflow-step-3">
+                                        <div class="step-indicator">
+                                            <i class="fa-solid fa-file-excel step-icon"></i>
+                                        </div>
+                                        <div class="step-details">
+                                            <div class="step-title">3. ส่งออกผลลัพธ์ Excel 4 แท็บ (100% Export)</div>
+                                            <div class="step-desc" id="step-3-desc">ดาวน์โหลดไฟล์ผลลัพธ์แยกหมวดหมู่สมบูรณ์ 100%</div>
+                                        </div>
+                                        <span class="step-status-chip chip-pending" id="step-3-chip">รอขั้นตอนที่ 2</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
