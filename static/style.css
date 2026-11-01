@@ -148,20 +148,24 @@ body {
 .sidebar-topbar-toggle {
     display: inline-flex;
     font-size: 14px;
-    padding: 6px 10px;
-    border-radius: 6px;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border-radius: var(--radius-sm);
     border: 1px solid var(--border-color);
     background: var(--bg-surface);
     color: var(--text-secondary);
     cursor: pointer;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
     transition: all 0.2s ease;
 }
 
 .sidebar-topbar-toggle:hover {
     color: var(--text-primary);
     border-color: var(--border-focus);
+    background: var(--bg-app);
 }
 
 /* ==========================================================================
@@ -451,16 +455,37 @@ body {
     z-index: 10;
 }
 
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-width: 0;
+}
+
+.topbar-title-wrap {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+}
+
 .view-title {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 700;
     color: var(--text-primary);
-    line-height: 1.2;
+    line-height: 1.25;
+    margin: 0;
+    white-space: nowrap;
 }
 
 .view-desc {
-    font-size: 12px;
+    font-size: 11.5px;
     color: var(--text-muted);
+    line-height: 1.2;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .topbar-right {
