@@ -565,44 +565,225 @@ body {
 /* ==========================================================================
    Modern Bento File Ingestion Cards & Executive Dashboard
    ========================================================================== */
-.panel-header-banner {
+.compact-control-strip {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 16px;
     background: var(--bg-surface);
     border: 1px solid var(--border-color);
-    border-radius: var(--radius-lg);
-    padding: 16px 20px;
-    margin-bottom: 20px;
+    border-radius: var(--radius-md);
+    padding: 10px 18px;
+    margin-bottom: 18px;
     box-shadow: var(--shadow-sm);
 }
 
-.banner-text h3 {
-    font-size: 16px;
+.strip-status-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+}
+
+.strip-pill {
     font-weight: 700;
     color: var(--text-primary);
-    margin-bottom: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.strip-text {
+    color: var(--text-secondary);
+}
+
+.strip-actions .btn {
+    box-shadow: 0 2px 10px rgba(37, 99, 235, 0.3);
+    padding: 7px 16px;
+    font-size: 12.5px;
+}
+
+/* ==========================================================================
+   Split View Layout: Master (Left ~32%) vs Target Categories (Right ~68%)
+   ========================================================================== */
+.data-sources-split-layout {
+    display: flex;
+    align-items: stretch;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+@media (max-width: 1100px) {
+    .data-sources-split-layout {
+        flex-direction: column;
+    }
+}
+
+.split-zone {
+    display: flex;
+    flex-direction: column;
+}
+
+.split-zone-master {
+    flex: 0 0 310px;
+}
+
+.split-zone-targets {
+    flex: 1;
+    min-width: 0;
+}
+
+.zone-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    padding: 0 4px;
+}
+
+.zone-heading {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-primary);
     display: flex;
     align-items: center;
     gap: 8px;
-}
-
-.banner-text p {
-    font-size: 12.5px;
-    color: var(--text-secondary);
     margin: 0;
 }
 
-.banner-quick-actions {
+.zone-badge {
+    font-size: 10.5px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    letter-spacing: 0.2px;
+}
+
+.badge-targets {
+    background: rgba(37, 99, 235, 0.1);
+    color: var(--blue-primary);
+}
+
+[data-theme="dark"] .badge-targets {
+    background: rgba(56, 189, 248, 0.12);
+    color: #38bdf8;
+}
+
+/* VS Connector */
+.split-zone-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
     flex-shrink: 0;
 }
 
-.banner-quick-actions .btn {
-    box-shadow: 0 4px 14px rgba(37, 99, 235, 0.35);
+@media (max-width: 1100px) {
+    .split-zone-connector {
+        flex-direction: row;
+        width: 100%;
+        height: 28px;
+    }
 }
 
-/* Bento File Cards Grid */
+.connector-line {
+    flex: 1;
+    width: 2px;
+    background: var(--border-color);
+}
+
+@media (max-width: 1100px) {
+    .connector-line {
+        width: 100%;
+        height: 2px;
+    }
+}
+
+.connector-badge {
+    font-size: 11px;
+    font-weight: 800;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    border-radius: 50%;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 6px 0;
+    box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 1100px) {
+    .connector-badge {
+        margin: 0 10px;
+    }
+}
+
+/* 3-Column Targets Grid */
+.targets-3col-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    flex: 1;
+}
+
+@media (max-width: 800px) {
+    .targets-3col-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Master Hero Card Specifics */
+.file-card.file-master-hero {
+    height: 100%;
+    background: linear-gradient(180deg, var(--bg-surface) 0%, rgba(16, 185, 129, 0.04) 100%);
+    border-color: rgba(16, 185, 129, 0.35);
+}
+
+[data-theme="dark"] .file-card.file-master-hero {
+    background: linear-gradient(180deg, #111827 0%, rgba(16, 185, 129, 0.08) 100%);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.hero-master-stats {
+    background: rgba(16, 185, 129, 0.08);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    margin: 10px 0 12px 0;
+    text-align: center;
+}
+
+.master-stat-val {
+    font-size: 26px;
+    font-weight: 800;
+    color: #059669;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.1;
+}
+
+[data-theme="dark"] .master-stat-val {
+    color: #34d399;
+}
+
+.master-stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    margin-top: 4px;
+}
+
+.file-status-sub {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 12px;
+    line-height: 1.3;
+}
+
+/* Bento File Cards Grid (General) */
 .files-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);

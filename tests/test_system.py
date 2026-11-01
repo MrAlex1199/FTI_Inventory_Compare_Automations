@@ -24,10 +24,17 @@ def test_manual_compare_and_spreadsheet_workflow():
 
     # 1. Start fresh and load master + categories
     comparator.reset_session()
-    base_master = os.path.join(BASE_DIR, "0-FTI_asset_HWSWOth.xlsx")
-    base_hw = os.path.join(BASE_DIR, "1-it_asset_HW.xlsx")
-    base_sw = os.path.join(BASE_DIR, "2-it_asset_SW.xlsx")
-    base_ups = os.path.join(BASE_DIR, "3-it_asset_UPS_Monitor.xlsx")
+    def find_file(fname):
+        p1 = os.path.join(BASE_DIR, fname)
+        if os.path.exists(p1): return p1
+        p2 = os.path.join(os.path.dirname(BASE_DIR), fname)
+        if os.path.exists(p2): return p2
+        return p1
+
+    base_master = find_file("0-FTI_asset_HWSWOth.xlsx")
+    base_hw = find_file("1-it_asset_HW.xlsx")
+    base_sw = find_file("2-it_asset_SW.xlsx")
+    base_ups = find_file("3-it_asset_UPS_Monitor.xlsx")
 
     print("[2] Loading files without auto-comparing...")
     comparator.load_master(base_master)

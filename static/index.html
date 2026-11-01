@@ -119,111 +119,137 @@
             <main class="app-content-body">
                 <!-- VIEW 1: Files Ingestion & Executive Dashboard View -->
                 <div class="view-panel active" id="view-files">
-                    <div class="panel-header-banner">
-                        <div class="banner-text">
-                            <h3><i class="fa-solid fa-layer-group"></i> ศูนย์จัดการข้อมูลและเปรียบเทียบสินทรัพย์ (Asset Hub)</h3>
-                            <p>ตรวจสอบความพร้อมของไฟล์ ERP Master และไฟล์ IT Inventory ทั้ง 3 หมวดหมู่ พร้อมประมวลผลเปรียบเทียบได้อย่างอิสระ</p>
+                    <!-- Compact Control Strip (Status + Quick Action) -->
+                    <div class="compact-control-strip">
+                        <div class="strip-status-info">
+                            <span class="strip-pill"><i class="fa-solid fa-layer-group text-blue"></i> สถานะความพร้อม:</span>
+                            <span class="strip-text" id="strip-files-status">กำลังโหลดข้อมูลความพร้อมของไฟล์...</span>
                         </div>
-                        <div class="banner-quick-actions">
-                            <button class="btn btn-primary" id="btn-banner-compare-all">
-                                <i class="fa-solid fa-bolt"></i> เปรียบเทียบทุกหมวดหมู่อัตโนมัติ
+                        <div class="strip-actions">
+                            <button class="btn btn-primary btn-sm" id="btn-banner-compare-all">
+                                <i class="fa-solid fa-bolt"></i> เปรียบเทียบทุกหมวดหมู่อัตโนมัติ (Compare All)
                             </button>
                         </div>
                     </div>
 
-                    <!-- Modern Bento File Cards Grid -->
-                    <div class="files-grid">
-                        <!-- Master Card -->
-                        <div class="file-card file-master" id="dropzone-master" data-filetype="master">
-                            <div class="file-card-top">
-                                <span class="tag-cat tag-master"><i class="fa-solid fa-database"></i> ไฟล์หลัก ERP (Master)</span>
-                                <span class="file-badge badge-empty" id="filebadge-master">รอไฟล์</span>
+                    <!-- Split View Layout: Master vs 3 Target Categories (1:3 Architecture) -->
+                    <div class="data-sources-split-layout">
+                        <!-- Zone 1: ERP Master Source (Left ~32%) -->
+                        <div class="split-zone split-zone-master">
+                            <div class="zone-header">
+                                <h4 class="zone-heading">
+                                    <i class="fa-solid fa-database text-green"></i> [1] ฐานข้อมูลอ้างอิงหลัก (ERP Master)
+                                </h4>
+                                <span class="zone-badge tag-master">Source of Truth</span>
                             </div>
-                            <div class="file-title" id="filename-master">0-FTI_asset_HWSWOth.xlsx</div>
-                            <div class="file-metrics-row">
-                                <span class="file-metric"><i class="fa-solid fa-list-check"></i> <strong id="file-rows-master">0</strong> รายการ ERP</span>
-                                <span class="file-metric-badge tag-master">ฐานข้อมูลหลัก</span>
+
+                            <div class="file-card file-master file-master-hero" id="dropzone-master" data-filetype="master">
+                                <div class="file-card-top">
+                                    <span class="tag-cat tag-master"><i class="fa-solid fa-shield-halved"></i> ฐานข้อมูล ERP (AX)</span>
+                                    <span class="file-badge badge-empty" id="filebadge-master">รอไฟล์</span>
+                                </div>
+                                <div class="file-title" id="filename-master">0-FTI_asset_HWSWOth.xlsx</div>
+                                <div class="hero-master-stats">
+                                    <div class="master-stat-val" id="file-rows-master">0</div>
+                                    <div class="master-stat-label">รายการสินทรัพย์หลักทั้งหมดในระบบ ERP AX</div>
+                                </div>
+                                <div class="file-sub" id="filemeta-master">ไฟล์หลักสำหรับใช้อ้างอิงและตรวจสอบความถูกต้องของทั้ง 3 หมวด</div>
+                                <div class="file-action-row">
+                                    <button class="btn btn-secondary btn-sm btn-reupload-card" onclick="document.getElementById('file-input-master').click();">
+                                        <i class="fa-solid fa-cloud-arrow-up"></i> เปลี่ยนไฟล์ ERP
+                                    </button>
+                                </div>
+                                <div class="drop-hint"><i class="fa-solid fa-arrow-up-from-bracket"></i> ลากไฟล์มาวาง หรือคลิกเปลี่ยนไฟล์</div>
+                                <input type="file" id="file-input-master" accept=".xlsx,.xls" hidden>
                             </div>
-                            <div class="file-sub" id="filemeta-master">ข้อมูลสินทรัพย์หลักจากระบบ ERP (AX)</div>
-                            <div class="file-action-row">
-                                <button class="btn btn-secondary btn-sm btn-reupload-card" onclick="document.getElementById('file-input-master').click();">
-                                    <i class="fa-solid fa-cloud-arrow-up"></i> เปลี่ยนไฟล์ ERP
-                                </button>
-                            </div>
-                            <div class="drop-hint"><i class="fa-solid fa-arrow-up-from-bracket"></i> ลากไฟล์มาวาง หรือคลิกเปลี่ยนไฟล์</div>
-                            <input type="file" id="file-input-master" accept=".xlsx,.xls" hidden>
                         </div>
 
-                        <!-- HW Card -->
-                        <div class="file-card file-hw-theme" id="dropzone-hw" data-filetype="hw">
-                            <div class="file-card-top">
-                                <span class="tag-cat tag-hw"><i class="fa-solid fa-desktop"></i> Hardware</span>
-                                <span class="file-badge badge-empty" id="filebadge-hw">รอไฟล์</span>
-                            </div>
-                            <div class="file-title" id="filename-hw">1-it_asset_HW.xlsx</div>
-                            <div class="file-metrics-row">
-                                <span class="file-metric"><i class="fa-solid fa-laptop"></i> <strong id="file-rows-hw">0</strong> รายการ</span>
-                                <span class="file-metric-sub" id="file-status-detail-hw">รอเริ่มการเปรียบเทียบ</span>
-                            </div>
-                            <div class="file-sub" id="filemeta-hw">คอมพิวเตอร์ PC, Notebook และอุปกรณ์ HW</div>
-                            <div class="file-action-row">
-                                <button class="btn btn-primary btn-sm btn-card-compare" data-cat="hw" id="btn-card-compare-hw" title="กดเพื่อเริ่มเปรียบเทียบหมวด Hardware ทันที">
-                                    <i class="fa-solid fa-play"></i> เปรียบเทียบ
-                                </button>
-                                <button class="btn btn-secondary btn-sm btn-nav-to-cat" data-goto="hw">
-                                    <i class="fa-solid fa-arrow-right"></i> เปิดดูข้อมูล
-                                </button>
-                            </div>
-                            <div class="drop-hint"><i class="fa-solid fa-arrow-up-from-bracket"></i> ลากไฟล์มาวาง หรือคลิกเปลี่ยนไฟล์</div>
-                            <input type="file" id="file-input-hw" accept=".xlsx,.xls" hidden>
+                        <!-- Visual Relationship Connector (VS) -->
+                        <div class="split-zone-connector" title="เปรียบเทียบข้อมูล 3 หมวดหมู่ IT เทียบกับฐานข้อมูล ERP Master">
+                            <div class="connector-line"></div>
+                            <div class="connector-badge">VS</div>
+                            <div class="connector-line"></div>
                         </div>
 
-                        <!-- SW Card -->
-                        <div class="file-card file-sw-theme" id="dropzone-sw" data-filetype="sw">
-                            <div class="file-card-top">
-                                <span class="tag-cat tag-sw"><i class="fa-solid fa-code"></i> Software</span>
-                                <span class="file-badge badge-empty" id="filebadge-sw">รอไฟล์</span>
+                        <!-- Zone 2: Target Categories (Right ~68%) -->
+                        <div class="split-zone split-zone-targets">
+                            <div class="zone-header">
+                                <h4 class="zone-heading">
+                                    <i class="fa-solid fa-table-list text-blue"></i> [2] ไฟล์ IT Inventory ที่นำมาเปรียบเทียบ (3 หมวดหมู่)
+                                </h4>
+                                <span class="zone-badge badge-targets">Target Inventory Files</span>
                             </div>
-                            <div class="file-title" id="filename-sw">2-it_asset_SW.xlsx</div>
-                            <div class="file-metrics-row">
-                                <span class="file-metric"><i class="fa-solid fa-code"></i> <strong id="file-rows-sw">0</strong> รายการ</span>
-                                <span class="file-metric-sub" id="file-status-detail-sw">รอเริ่มการเปรียบเทียบ</span>
-                            </div>
-                            <div class="file-sub" id="filemeta-sw">โปรแกรมคอมพิวเตอร์และ License ลิขสิทธิ์</div>
-                            <div class="file-action-row">
-                                <button class="btn btn-primary btn-sm btn-card-compare" data-cat="sw" id="btn-card-compare-sw" title="กดเพื่อเริ่มเปรียบเทียบหมวด Software ทันที">
-                                    <i class="fa-solid fa-play"></i> เปรียบเทียบ
-                                </button>
-                                <button class="btn btn-secondary btn-sm btn-nav-to-cat" data-goto="sw">
-                                    <i class="fa-solid fa-arrow-right"></i> เปิดดูข้อมูล
-                                </button>
-                            </div>
-                            <div class="drop-hint"><i class="fa-solid fa-arrow-up-from-bracket"></i> ลากไฟล์มาวาง หรือคลิกเปลี่ยนไฟล์</div>
-                            <input type="file" id="file-input-sw" accept=".xlsx,.xls" hidden>
-                        </div>
 
-                        <!-- UPS Card -->
-                        <div class="file-card file-ups-theme" id="dropzone-ups" data-filetype="ups">
-                            <div class="file-card-top">
-                                <span class="tag-cat tag-ups"><i class="fa-solid fa-car-battery"></i> UPS & Monitor</span>
-                                <span class="file-badge badge-empty" id="filebadge-ups">รอไฟล์</span>
+                            <div class="targets-3col-grid">
+                                <!-- HW Card -->
+                                <div class="file-card file-hw-theme" id="dropzone-hw" data-filetype="hw">
+                                    <div class="file-card-top">
+                                        <span class="tag-cat tag-hw"><i class="fa-solid fa-desktop"></i> Hardware</span>
+                                        <span class="file-badge badge-empty" id="filebadge-hw">รอไฟล์</span>
+                                    </div>
+                                    <div class="file-title" id="filename-hw">1-it_asset_HW.xlsx</div>
+                                    <div class="file-metrics-row">
+                                        <span class="file-metric"><i class="fa-solid fa-laptop"></i> <strong id="file-rows-hw">0</strong> รายการ</span>
+                                    </div>
+                                    <div class="file-status-sub" id="file-status-detail-hw">รอเริ่มการเปรียบเทียบ</div>
+                                    <div class="file-action-row">
+                                        <button class="btn btn-primary btn-sm btn-card-compare" data-cat="hw" id="btn-card-compare-hw" title="กดเพื่อเริ่มเปรียบเทียบหมวด Hardware ทันที">
+                                            <i class="fa-solid fa-play"></i> เปรียบเทียบ
+                                        </button>
+                                        <button class="btn btn-secondary btn-sm btn-nav-to-cat" data-goto="hw">
+                                            <i class="fa-solid fa-arrow-right"></i> เปิดดูข้อมูล
+                                        </button>
+                                    </div>
+                                    <div class="drop-hint"><i class="fa-solid fa-arrow-up-from-bracket"></i> ลากไฟล์มาวาง</div>
+                                    <input type="file" id="file-input-hw" accept=".xlsx,.xls" hidden>
+                                </div>
+
+                                <!-- SW Card -->
+                                <div class="file-card file-sw-theme" id="dropzone-sw" data-filetype="sw">
+                                    <div class="file-card-top">
+                                        <span class="tag-cat tag-sw"><i class="fa-solid fa-code"></i> Software</span>
+                                        <span class="file-badge badge-empty" id="filebadge-sw">รอไฟล์</span>
+                                    </div>
+                                    <div class="file-title" id="filename-sw">2-it_asset_SW.xlsx</div>
+                                    <div class="file-metrics-row">
+                                        <span class="file-metric"><i class="fa-solid fa-code"></i> <strong id="file-rows-sw">0</strong> รายการ</span>
+                                    </div>
+                                    <div class="file-status-sub" id="file-status-detail-sw">รอเริ่มการเปรียบเทียบ</div>
+                                    <div class="file-action-row">
+                                        <button class="btn btn-primary btn-sm btn-card-compare" data-cat="sw" id="btn-card-compare-sw" title="กดเพื่อเริ่มเปรียบเทียบหมวด Software ทันที">
+                                            <i class="fa-solid fa-play"></i> เปรียบเทียบ
+                                        </button>
+                                        <button class="btn btn-secondary btn-sm btn-nav-to-cat" data-goto="sw">
+                                            <i class="fa-solid fa-arrow-right"></i> เปิดดูข้อมูล
+                                        </button>
+                                    </div>
+                                    <div class="drop-hint"><i class="fa-solid fa-arrow-up-from-bracket"></i> ลากไฟล์มาวาง</div>
+                                    <input type="file" id="file-input-sw" accept=".xlsx,.xls" hidden>
+                                </div>
+
+                                <!-- UPS Card -->
+                                <div class="file-card file-ups-theme" id="dropzone-ups" data-filetype="ups">
+                                    <div class="file-card-top">
+                                        <span class="tag-cat tag-ups"><i class="fa-solid fa-car-battery"></i> UPS & Monitor</span>
+                                        <span class="file-badge badge-empty" id="filebadge-ups">รอไฟล์</span>
+                                    </div>
+                                    <div class="file-title" id="filename-ups">3-it_asset_UPS_Monitor.xlsx</div>
+                                    <div class="file-metrics-row">
+                                        <span class="file-metric"><i class="fa-solid fa-car-battery"></i> <strong id="file-rows-ups">0</strong> รายการ</span>
+                                    </div>
+                                    <div class="file-status-sub" id="file-status-detail-ups">รอเริ่มการเปรียบเทียบ</div>
+                                    <div class="file-action-row">
+                                        <button class="btn btn-primary btn-sm btn-card-compare" data-cat="ups" id="btn-card-compare-ups" title="กดเพื่อเริ่มเปรียบเทียบหมวด UPS & Monitor ทันที">
+                                            <i class="fa-solid fa-play"></i> เปรียบเทียบ
+                                        </button>
+                                        <button class="btn btn-secondary btn-sm btn-nav-to-cat" data-goto="ups">
+                                            <i class="fa-solid fa-arrow-right"></i> เปิดดูข้อมูล
+                                        </button>
+                                    </div>
+                                    <div class="drop-hint"><i class="fa-solid fa-arrow-up-from-bracket"></i> ลากไฟล์มาวาง</div>
+                                    <input type="file" id="file-input-ups" accept=".xlsx,.xls" hidden>
+                                </div>
                             </div>
-                            <div class="file-title" id="filename-ups">3-it_asset_UPS_Monitor.xlsx</div>
-                            <div class="file-metrics-row">
-                                <span class="file-metric"><i class="fa-solid fa-car-battery"></i> <strong id="file-rows-ups">0</strong> รายการ</span>
-                                <span class="file-metric-sub" id="file-status-detail-ups">รอเริ่มการเปรียบเทียบ</span>
-                            </div>
-                            <div class="file-sub" id="filemeta-ups">เครื่องสำรองไฟและหน้าจอคอมพิวเตอร์</div>
-                            <div class="file-action-row">
-                                <button class="btn btn-primary btn-sm btn-card-compare" data-cat="ups" id="btn-card-compare-ups" title="กดเพื่อเริ่มเปรียบเทียบหมวด UPS & Monitor ทันที">
-                                    <i class="fa-solid fa-play"></i> เปรียบเทียบ
-                                </button>
-                                <button class="btn btn-secondary btn-sm btn-nav-to-cat" data-goto="ups">
-                                    <i class="fa-solid fa-arrow-right"></i> เปิดดูข้อมูล
-                                </button>
-                            </div>
-                            <div class="drop-hint"><i class="fa-solid fa-arrow-up-from-bracket"></i> ลากไฟล์มาวาง หรือคลิกเปลี่ยนไฟล์</div>
-                            <input type="file" id="file-input-ups" accept=".xlsx,.xls" hidden>
                         </div>
                     </div>
 

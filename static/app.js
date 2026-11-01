@@ -474,6 +474,20 @@ document.addEventListener("DOMContentLoaded", () => {
         updateStatusDetail("sw", "file-status-detail-sw");
         updateStatusDetail("ups", "file-status-detail-ups");
 
+        // Update Compact Control Strip Readiness Status
+        const stripStatus = document.getElementById("strip-files-status");
+        if (stripStatus) {
+            const masterOk = files.master && files.master.loaded;
+            const countLoaded = ["hw", "sw", "ups"].filter(c => files[c] && files[c].loaded).length;
+            if (masterOk && countLoaded === 3) {
+                stripStatus.innerHTML = '<span class="text-green"><i class="fa-solid fa-circle-check"></i> พร้อมเปรียบเทียบครบทั้ง 4 ไฟล์ (1 Master + 3 IT Targets)</span>';
+            } else if (masterOk) {
+                stripStatus.innerHTML = `<span class="text-blue"><i class="fa-solid fa-circle-info"></i> ไฟล์ Master พร้อมแล้ว และโหลดไฟล์ IT ได้ ${countLoaded}/3 หมวดหมู่</span>`;
+            } else {
+                stripStatus.innerHTML = '<span class="text-amber"><i class="fa-solid fa-triangle-exclamation"></i> กรุณาอัปโหลดไฟล์หลัก ERP Master ก่อนทำการเปรียบเทียบ</span>';
+            }
+        }
+
         // Executive Dashboard KPI & Stepper Calculation
         updateExecutiveDashboard(data);
 
