@@ -657,47 +657,177 @@
         </div>
     </div>
 
-    <!-- Modal: Settings & Logs -->
+    <!-- Modal: Settings & System Tools (Ultra-Premium Bento Grid) -->
     <div class="modal-overlay" id="modal-settings" style="display: none;">
         <div class="modal-box modal-settings-box">
-            <div class="modal-header">
+            <!-- Modal Header -->
+            <div class="modal-header settings-bento-header">
                 <div class="modal-title-wrap">
-                    <div class="modal-icon"><i class="fa-solid fa-gear"></i></div>
+                    <div class="settings-header-icon bg-blue-subtle text-blue">
+                        <i class="fa-solid fa-sliders"></i>
+                    </div>
                     <div>
                         <h3 class="modal-title">ตั้งค่าและเครื่องมือระบบ</h3>
-                        <p class="modal-sub">การจัดการเซสชัน, Live Logs, และข้อมูลระบบ</p>
+                        <p class="modal-sub">จัดการธีมการแสดงผล, ฐานข้อมูลเซสชัน, และการวินิจฉัยระบบ</p>
                     </div>
                 </div>
-                <button class="modal-close" id="btn-close-settings">✕</button>
+                <button class="modal-close" id="btn-close-settings" title="ปิดหน้าต่าง">✕</button>
             </div>
-            <div class="modal-body">
-                <div class="settings-group">
-                    <div class="settings-title">การจัดการเซสชันข้อมูล</div>
-                    <p class="settings-desc">ล้างข้อมูลทั้งหมดที่บันทึกไว้ในเครื่องและเริ่มต้นเซสชันใหม่แบบคลีน</p>
-                    <button class="btn btn-secondary btn-sm" id="btn-settings-new-session">
-                        <i class="fa-solid fa-file-circle-plus"></i> เริ่มเซสชันใหม่ (Reset Session)
-                    </button>
-                </div>
 
-                <div class="settings-group">
-                    <div class="settings-title">System Console & Logs</div>
-                    <p class="settings-desc">เปิดหน้าต่าง System Logs สำหรับการตรวจสอบข้อผิดพลาด</p>
-                    <button class="btn btn-secondary btn-sm" id="btn-settings-open-logs">
-                        <i class="fa-solid fa-terminal"></i> เปิดหน้าต่าง Live Logs
-                    </button>
-                </div>
+            <!-- Modal Body: Bento Cards Grid -->
+            <div class="modal-body settings-bento-body">
+                <div class="settings-bento-grid">
+                    
+                    <!-- Card 1: ธีมและการแสดงผล (Appearance & Theme) -->
+                    <div class="settings-bento-card">
+                        <div class="bento-card-header">
+                            <div class="bento-card-icon-wrap bg-purple-subtle text-purple">
+                                <i class="fa-solid fa-palette"></i>
+                            </div>
+                            <div class="bento-card-title-wrap">
+                                <h4 class="bento-card-title">การแสดงผลและธีม (Appearance)</h4>
+                                <span class="bento-card-sub">ปรับแต่งรูปแบบสีหน้าจอและการบันทึกข้อมูลอัตโนมัติ</span>
+                            </div>
+                        </div>
 
-                <div class="settings-group">
-                    <div class="settings-title">ข้อมูลเวอร์ชันโปรแกรม (Build Information)</div>
-                    <div style="font-size: 13px; line-height: 1.8; color: var(--text-secondary); background: var(--bg-app); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
-                        <div><strong>เวอร์ชันโปรแกรม:</strong> <span id="settings-app-version">v2.1.0</span></div>
-                        <div><strong>หมายเลขบิลด์:</strong> <span id="settings-build-num">Build 1</span></div>
-                        <div><strong>วันที่และเวลาคอมไพล์:</strong> <span id="settings-compile-time">-</span></div>
+                        <div class="bento-card-content">
+                            <!-- Theme Switcher Segmented Control -->
+                            <div class="settings-control-row">
+                                <div class="control-label-wrap">
+                                    <span class="control-label">โทนสีของโปรแกรม</span>
+                                    <span class="control-desc">เลือกธีมมืดหรือธีมสว่างตามสภาพแสง</span>
+                                </div>
+                                <div class="theme-segmented-control">
+                                    <button class="theme-seg-btn active" id="btn-theme-dark" data-theme="dark">
+                                        <i class="fa-solid fa-moon"></i> ธีมมืด (Dark)
+                                    </button>
+                                    <button class="theme-seg-btn" id="btn-theme-light" data-theme="light">
+                                        <i class="fa-solid fa-sun"></i> ธีมสว่าง (Light)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Autosave Preference Pill -->
+                            <div class="settings-control-row" style="margin-top: 14px;">
+                                <div class="control-label-wrap">
+                                    <span class="control-label">การบันทึกสถานะอัตโนมัติ (Autosave)</span>
+                                    <span class="control-desc">บันทึกทุกขั้นตอนการแก้ไขและเปรียบเทียบข้อมูลลงเครื่องทันที</span>
+                                </div>
+                                <span class="badge-status-pill badge-pill-green">
+                                    <i class="fa-solid fa-cloud-arrow-up"></i> ทำงานตลอดเวลา
+                                </span>
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- Card 2: ฐานข้อมูล & พื้นที่จัดเก็บเซสชัน (Session & Storage) -->
+                    <div class="settings-bento-card">
+                        <div class="bento-card-header">
+                            <div class="bento-card-icon-wrap bg-cyan-subtle text-cyan">
+                                <i class="fa-solid fa-database"></i>
+                            </div>
+                            <div class="bento-card-title-wrap">
+                                <h4 class="bento-card-title">ฐานข้อมูลและพื้นที่จัดเก็บเซสชัน (Storage)</h4>
+                                <span class="bento-card-sub">ข้อมูลไฟล์บันทึกสถานะการเปรียบเทียบในเครื่อง (Local Persistence)</span>
+                            </div>
+                        </div>
+
+                        <div class="bento-card-content">
+                            <!-- Storage Path Box -->
+                            <div class="storage-info-box">
+                                <div class="storage-header">
+                                    <span class="storage-label"><i class="fa-solid fa-folder-tree"></i> ตำแหน่งไฟล์เซสชัน (Autosave File):</span>
+                                    <button class="btn-copy-path" id="btn-copy-autosave-path" title="คัดลอกตำแหน่งไฟล์">
+                                        <i class="fa-solid fa-copy"></i> คัดลอก Path
+                                    </button>
+                                </div>
+                                <div class="storage-path-text" id="settings-storage-path">กำลังโหลดตำแหน่งไฟล์...</div>
+                                
+                                <div class="storage-meta-pills">
+                                    <span class="storage-pill"><i class="fa-solid fa-hard-drive"></i> ขนาดไฟล์: <strong id="settings-storage-size">- KB</strong></span>
+                                    <span class="storage-pill"><i class="fa-solid fa-clock-rotate-left"></i> บันทึกล่าสุด: <strong id="settings-storage-time">-</strong></span>
+                                </div>
+                            </div>
+
+                            <!-- Danger Zone Tile -->
+                            <div class="danger-zone-tile">
+                                <div class="danger-zone-icon text-rose">
+                                    <i class="fa-solid fa-triangle-exclamation"></i>
+                                </div>
+                                <div class="danger-zone-content">
+                                    <div class="danger-zone-title">พื้นที่อันตราย (Danger Zone) - ล้างเซสชันข้อมูล</div>
+                                    <p class="danger-zone-desc">ล้างข้อมูลประวัติและผลการเทียบทั้งหมดเพื่อเริ่มเซสชันใหม่แบบคลีน (ไม่กระทบไฟล์ Excel ต้นฉบับ)</p>
+                                </div>
+                                <button class="btn btn-danger-soft btn-sm" id="btn-settings-new-session">
+                                    <i class="fa-solid fa-trash-can"></i> เริ่มเซสชันใหม่
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Card 3: ข้อมูลระบบ & การตรวจสอบ (System Diagnostics & Live Logs) -->
+                    <div class="settings-bento-card">
+                        <div class="bento-card-header">
+                            <div class="bento-card-icon-wrap bg-amber-subtle text-amber">
+                                <i class="fa-solid fa-microchip"></i>
+                            </div>
+                            <div class="bento-card-title-wrap">
+                                <h4 class="bento-card-title">ข้อมูลระบบและการวินิจฉัย (System & Diagnostics)</h4>
+                                <span class="bento-card-sub">ข้อมูลการคอมไพล์ สภาพแวดล้อมระบบ และคอนโซลตรวจสอบข้อผิดพลาด</span>
+                            </div>
+                        </div>
+
+                        <div class="bento-card-content">
+                            <!-- Diagnostics Specs Grid -->
+                            <div class="diagnostics-grid">
+                                <div class="diag-item">
+                                    <span class="diag-label">เวอร์ชันโปรแกรม</span>
+                                    <div class="diag-val-wrap">
+                                        <span class="diag-val text-blue" id="settings-app-version">v2.1.0</span>
+                                        <span class="diag-badge-pill" id="settings-build-num">Build 11</span>
+                                    </div>
+                                </div>
+                                <div class="diag-item">
+                                    <span class="diag-label">วันที่และเวลาคอมไพล์</span>
+                                    <span class="diag-val" id="settings-compile-time">-</span>
+                                </div>
+                                <div class="diag-item">
+                                    <span class="diag-label">สภาพแวดล้อมรันไทม์</span>
+                                    <span class="diag-val" id="settings-runtime-env">Python 3.13 / FastAPI Desktop</span>
+                                </div>
+                                <div class="diag-item">
+                                    <span class="diag-label">ระบบปฏิบัติการ</span>
+                                    <span class="diag-val" id="settings-os-info">Windows 11 (64-bit)</span>
+                                </div>
+                            </div>
+
+                            <!-- Diagnostic Actions -->
+                            <div class="diag-actions-row">
+                                <button class="btn btn-secondary btn-sm" id="btn-settings-open-logs">
+                                    <i class="fa-solid fa-terminal text-green"></i> เปิดหน้าต่าง Live Logs & Console
+                                </button>
+                                <button class="btn btn-secondary btn-sm" id="btn-copy-diagnostics">
+                                    <i class="fa-solid fa-clipboard-check"></i> คัดลอกข้อมูลระบบ (Copy Diagnostics)
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
-            <div class="modal-footer">
-                <button class="btn btn-secondary" id="btn-done-settings">ปิดหน้าต่าง</button>
+
+            <!-- Modal Footer -->
+            <div class="modal-footer settings-bento-footer">
+                <div class="settings-footer-left">
+                    <span class="footer-status-pill text-green">
+                        <i class="fa-solid fa-circle-check"></i> ระบบพร้อมทำงานสมบูรณ์
+                    </span>
+                </div>
+                <div class="settings-footer-right">
+                    <button class="btn btn-primary" id="btn-done-settings">
+                        <i class="fa-solid fa-check"></i> เสร็จสิ้น
+                    </button>
+                </div>
             </div>
         </div>
     </div>

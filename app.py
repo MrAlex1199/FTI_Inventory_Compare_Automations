@@ -556,13 +556,34 @@ async def reset_current_session():
 @app.get("/api/session/status")
 async def get_session_status():
     total = comparator.summary.get('overall', {}).get('total_records', 0) if comparator.summary else 0
+    initial_total = comparator.summary.get('overall', {}).get('total_initial_records', 0) if comparator.summary else 0
+    matched = comparator.summary.get('overall', {}).get('matched_records', 0) if comparator.summary else 0
+    
+    path = comparator.autosave_path or ""
+    size_kb = 0.0
+    last_mod = "-"
+    if path and os.path.exists(path):
+        try:
+            size_kb = round(os.path.getsize(path) / 1024, 1)
+            last_mod = pd.Timestamp.fromtimestamp(os.path.getmtime(path)).strftime("%Y-%m-%d %H:%M:%S")
+        except Exception:
+            pass
+
+    import platform
     return JSONResponse({
         "has_data": total > 0 or len(comparator.master_dict) > 0,
         "total_records": total,
+        "total_initial_records": initial_total,
+        "matched_records": matched,
         "can_undo": len(comparator.undo_stack) > 0,
         "can_redo": len(comparator.redo_stack) > 0,
         "history_count": len(comparator.undo_stack),
-        "autosave_path": comparator.autosave_path
+        "autosave_path": path,
+        "autosave_dir": os.path.dirname(path) if path else "",
+        "autosave_size_kb": size_kb,
+        "autosave_last_saved": last_mod,
+        "python_version": sys.version.split()[0],
+        "platform_system": f"{platform.system()} {platform.release()} ({platform.machine()})"
     })
 
 # =========================================================================

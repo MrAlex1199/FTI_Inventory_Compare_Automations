@@ -25,6 +25,11 @@ document.addEventListener("DOMContentLoaded", () => {
         settingsAppVersion: document.getElementById("settings-app-version"),
         settingsBuildNum: document.getElementById("settings-build-num"),
         settingsCompileTime: document.getElementById("settings-compile-time"),
+        settingsStoragePath: document.getElementById("settings-storage-path"),
+        settingsStorageSize: document.getElementById("settings-storage-size"),
+        settingsStorageTime: document.getElementById("settings-storage-time"),
+        settingsRuntimeEnv: document.getElementById("settings-runtime-env"),
+        settingsOsInfo: document.getElementById("settings-os-info"),
 
         // Theme & App Navigation
         themeToggle: document.getElementById("btn-theme-toggle"),
@@ -155,12 +160,21 @@ document.addEventListener("DOMContentLoaded", () => {
                 ? '<i class="fa-solid fa-sun" style="color: #f59e0b;"></i>'
                 : '<i class="fa-solid fa-moon"></i>';
         }
+        const btnDark = document.getElementById("btn-theme-dark");
+        const btnLight = document.getElementById("btn-theme-light");
+        if (btnDark && btnLight) {
+            btnDark.classList.toggle("active", theme === "dark");
+            btnLight.classList.toggle("active", theme === "light");
+        }
     }
     applyTheme(state.theme);
 
     elements.themeToggle.addEventListener("click", () => {
         applyTheme(state.theme === "dark" ? "light" : "dark");
     });
+
+    document.getElementById("btn-theme-dark")?.addEventListener("click", () => applyTheme("dark"));
+    document.getElementById("btn-theme-light")?.addEventListener("click", () => applyTheme("light"));
 
     // KPI Bar Collapse/Expand Toggle
     if (elements.btnToggleKpi && elements.bentoKpiGrid) {
@@ -1453,10 +1467,103 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.btnCloseHistory.addEventListener("click", () => { elements.modalHistory.style.display = "none"; });
     elements.btnDoneHistory.addEventListener("click", () => { elements.modalHistory.style.display = "none"; });
 
-    // Settings Modal
-    elements.btnOpenSettings.addEventListener("click", () => { elements.modalSettings.style.display = "flex"; });
+    // Settings Modal (Bento Grid)
+    async function loadSettingsModalData() {
+        try {
+            const [statusRes, verRes] = await Promise.all([
+                fetch("/api/session/status"),
+                fetch("/api/version")
+            ]);
+            const status = await statusRes.json();
+            const ver = await verRes.json();
+
+            if (elements.settingsStoragePath) {
+                elements.settingsStoragePath.textContent = status.autosave_path || "ยังไม่มีการบันทึกไฟล์";
+            }
+            if (elements.settingsStorageSize) {
+                elements.settingsStorageSize.textContent = `${status.autosave_size_kb || 0} KB`;
+            }
+            if (elements.settingsStorageTime) {
+                elements.settingsStorageTime.textContent = status.autosave_last_saved || "-";
+            }
+            if (elements.settingsRuntimeEnv) {
+                elements.settingsRuntimeEnv.textContent = `Python ${status.python_version || "3.13"} / FastAPI Desktop`;
+            }
+            if (elements.settingsOsInfo) {
+                elements.settingsOsInfo.textContent = status.platform_system || "Windows";
+            }
+            if (elements.settingsAppVersion) {
+                elements.settingsAppVersion.textContent = ver.display_version || ver.version || "v2.1.0";
+            }
+            if (elements.settingsBuildNum) {
+                elements.settingsBuildNum.textContent = `Build ${ver.build_number || "-"}`;
+            }
+            if (elements.settingsCompileTime) {
+                elements.settingsCompileTime.textContent = ver.compiled_at || "-";
+            }
+
+            state.diagnostics = {
+                app_version: ver.version || "2.1.0",
+                display_version: ver.display_version || "v2.1.0",
+                build_number: ver.build_number || 1,
+                compiled_at: ver.compiled_at || "-",
+                python_version: status.python_version || "-",
+                platform: status.platform_system || "-",
+                autosave_path: status.autosave_path || "-",
+                autosave_size_kb: status.autosave_size_kb || 0,
+                total_records: status.total_records || 0,
+                matched_records: status.matched_records || 0
+            };
+        } catch (e) {
+            console.warn("Failed to load settings modal data:", e);
+        }
+    }
+
+    elements.btnOpenSettings.addEventListener("click", () => {
+        elements.modalSettings.style.display = "flex";
+        applyTheme(state.theme);
+        loadSettingsModalData();
+    });
     elements.btnCloseSettings.addEventListener("click", () => { elements.modalSettings.style.display = "none"; });
     elements.btnDoneSettings.addEventListener("click", () => { elements.modalSettings.style.display = "none"; });
+
+    // Copy Autosave Path
+    const btnCopyPath = document.getElementById("btn-copy-autosave-path");
+    if (btnCopyPath) {
+        btnCopyPath.addEventListener("click", async () => {
+            const p = elements.settingsStoragePath ? elements.settingsStoragePath.textContent : "";
+            if (p && p !== "กำลังโหลดตำแหน่งไฟล์..." && p !== "ยังไม่มีการบันทึกไฟล์") {
+                try {
+                    await navigator.clipboard.writeText(p);
+                    showToast("คัดลอกตำแหน่งไฟล์สำเร็จ", "success");
+                } catch (e) {
+                    showToast("คัดลอกไม่สำเร็จ", "warning");
+                }
+            } else {
+                showToast("ไม่พบตำแหน่งไฟล์เซสชัน", "warning");
+            }
+        });
+    }
+
+    // Copy Diagnostics
+    const btnCopyDiag = document.getElementById("btn-copy-diagnostics");
+    if (btnCopyDiag) {
+        btnCopyDiag.addEventListener("click", async () => {
+            try {
+                const diagData = state.diagnostics || {
+                    version: elements.settingsAppVersion?.textContent || "v2.1.0",
+                    build: elements.settingsBuildNum?.textContent || "Build 11",
+                    compiled_at: elements.settingsCompileTime?.textContent || "-",
+                    os: elements.settingsOsInfo?.textContent || "Windows",
+                    runtime: elements.settingsRuntimeEnv?.textContent || "Python 3.13 / FastAPI"
+                };
+                await navigator.clipboard.writeText(JSON.stringify(diagData, null, 2));
+                showToast("คัดลอกข้อมูลระบบ (Diagnostics) สำเร็จ", "success");
+            } catch (e) {
+                showToast("คัดลอกข้อมูลไม่สำเร็จ", "warning");
+            }
+        });
+    }
 
     elements.btnSettingsNewSession.addEventListener("click", async () => {
         if (confirm("ต้องการเริ่มเซสชันใหม่หรือไม่? การกระทำนี้จะล้างข้อมูลและประวัติที่บันทึกไว้")) {
