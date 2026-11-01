@@ -205,6 +205,20 @@ def test_manual_compare_and_spreadsheet_workflow():
     assert st_after["category_states"]["ups"] == "stale"
     print("    Verified: all categories transitioned to 'stale' when Master ERP reloaded.")
 
+    # 10. Test Compare All with reset_to_orig
+    print("[11] Testing Compare All with reset_to_orig=True...")
+    res_cmp_all = client.post("/api/compare-all?reset_to_orig=true")
+    assert res_cmp_all.status_code == 200
+    ov_baseline = res_cmp_all.json()["summary"]["overall"]
+    assert ov_baseline["match_rate"] == 51.4, f"Expected 51.4%, got {ov_baseline['match_rate']}"
+    assert ov_baseline["mismatched_records"] == 377, f"Expected 377 mismatches, got {ov_baseline['mismatched_records']}"
+    print("    Verified: Compare All correctly establishes baseline (51.4% match rate, 377 mismatches).")
+
+    # Clean up test session state so production workspace starts in pristine 'loaded' state
+    client.post("/api/session/reset")
+    from app import init_app_session
+    init_app_session()
+
     print("\n[SUCCESS] All Manual Compare, Spreadsheet Inspector, and 4-Tab Export tests PASSED successfully!")
 
 if __name__ == "__main__":

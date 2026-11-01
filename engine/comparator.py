@@ -385,13 +385,23 @@ class InventoryComparator:
             rec["mismatch_type"] = m_type
             rec["diff_fields"] = diff_fields
 
-    def compare_category(self, category: str) -> Dict[str, Any]:
-        """Perform comparison on a single category, changing its state to 'compared'."""
+    def compare_category(self, category: str, reset_to_orig: bool = False) -> Dict[str, Any]:
+        """Perform comparison on a single category, changing its state to 'compared'.
+        If reset_to_orig is True, restores automatic cells to original file values (preserving user edits).
+        """
         if category not in ("hw", "sw", "ups"):
             raise ValueError(f"Unknown category: {category}")
 
         recs = self.records.get(category, [])
         for r in recs:
+            if reset_to_orig:
+                user_cols = set(r.get("user_edited_cols", []))
+                for col, orig_val in r.get("orig_cells", {}).items():
+                    if col not in user_cols:
+                        r["cells"][col] = orig_val
+                if r.get("manual_exclude") is None:
+                    r["is_excluded"] = False
+                    r["exclude_reason"] = ""
             self.evaluate_single_record(r)
 
         self.category_states[category] = "compared"

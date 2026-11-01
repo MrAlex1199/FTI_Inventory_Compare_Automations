@@ -109,25 +109,36 @@ def init_app_session():
             return
 
         # 3. First time fallback: load default base Excel files without comparing
-        base_master = os.path.join(BASE_DIR, "0-FTI_asset_HWSWOth.xlsx")
-        base_hw = os.path.join(BASE_DIR, "1-it_asset_HW.xlsx")
-        base_sw = os.path.join(BASE_DIR, "2-it_asset_SW.xlsx")
-        base_ups = os.path.join(BASE_DIR, "3-it_asset_UPS_Monitor.xlsx")
+        def find_base_file(fname):
+            candidates = [
+                os.path.join(BASE_DIR, fname),
+                os.path.join(os.path.dirname(BASE_DIR), fname),
+                os.path.join(os.getcwd(), fname),
+            ]
+            for c in candidates:
+                if os.path.exists(c):
+                    return c
+            return None
 
-        if os.path.exists(base_master) and (os.path.exists(base_hw) or os.path.exists(base_sw) or os.path.exists(base_ups)):
+        base_master = find_base_file("0-FTI_asset_HWSWOth.xlsx")
+        base_hw = find_base_file("1-it_asset_HW.xlsx")
+        base_sw = find_base_file("2-it_asset_SW.xlsx")
+        base_ups = find_base_file("3-it_asset_UPS_Monitor.xlsx")
+
+        if base_master and (base_hw or base_sw or base_ups):
             logger.info("First-time session: Loading default base Excel files into loaded state (ready for manual compare)...", component="SESSION")
             import shutil
-            if os.path.exists(base_master):
+            if base_master:
                 comparator.master_filename = "0-FTI_asset_HWSWOth.xlsx"
                 comparator.load_master(base_master)
                 shutil.copy2(base_master, os.path.join(SOURCES_DIR, "source_master.xlsx"))
-            if os.path.exists(base_hw):
+            if base_hw:
                 comparator.load_category("hw", base_hw, filename="1-it_asset_HW.xlsx")
                 shutil.copy2(base_hw, os.path.join(SOURCES_DIR, "source_hw.xlsx"))
-            if os.path.exists(base_sw):
+            if base_sw:
                 comparator.load_category("sw", base_sw, filename="2-it_asset_SW.xlsx")
                 shutil.copy2(base_sw, os.path.join(SOURCES_DIR, "source_sw.xlsx"))
-            if os.path.exists(base_ups):
+            if base_ups:
                 comparator.load_category("ups", base_ups, filename="3-it_asset_UPS_Monitor.xlsx")
                 shutil.copy2(base_ups, os.path.join(SOURCES_DIR, "source_ups.xlsx"))
 
@@ -288,7 +299,7 @@ async def get_summary():
     return JSONResponse(comparator.summary)
 
 @app.post("/api/compare/{category}")
-async def compare_single_category(category: str):
+async def compare_single_category(category: str, reset_to_orig: bool = Query(False, description="Reset automatic cells to original file values before comparing")):
     """Trigger explicit comparison for a specific category."""
     if category not in ("hw", "sw", "ups"):
         raise HTTPException(status_code=400, detail="Category must be hw, sw, or ups")
@@ -299,8 +310,8 @@ async def compare_single_category(category: str):
     if len(comparator.records.get(category, [])) == 0:
         raise HTTPException(status_code=400, detail=f"ยังไม่มีข้อมูลไฟล์ {category.upper()} สำหรับเปรียบเทียบ")
 
-    cat_summary = comparator.compare_category(category)
-    logger.info(f"Explicit comparison completed for {category.upper()}: {cat_summary.get('match_rate')}% match rate", component="COMPARE")
+    cat_summary = comparator.compare_category(category, reset_to_orig=reset_to_orig)
+    logger.info(f"Explicit comparison completed for {category.upper()}: {cat_summary.get('match_rate')}% match rate (reset_to_orig={reset_to_orig})", component="COMPARE")
 
     return JSONResponse({
         "status": "success",
@@ -308,6 +319,26 @@ async def compare_single_category(category: str):
         "category_state": comparator.category_states.get(category),
         "summary": comparator.summary,
         "category_summary": cat_summary
+    })
+
+@app.post("/api/compare-all")
+async def compare_all_categories(reset_to_orig: bool = Query(True, description="Reset automatic cells to original file values to get baseline comparison")):
+    """Trigger comparison across all 3 categories (HW, SW, UPS). Default reset_to_orig=True for baseline comparison."""
+    if len(comparator.master_dict) == 0:
+        raise HTTPException(status_code=400, detail="กรุณาอัปโหลดไฟล์หลัก ERP (Master) ก่อนทำการเปรียบเทียบ")
+
+    results = {}
+    for cat in ("hw", "sw", "ups"):
+        if len(comparator.records.get(cat, [])) > 0:
+            results[cat] = comparator.compare_category(cat, reset_to_orig=reset_to_orig)
+
+    logger.info(f"Explicit Compare All completed across all categories (reset_to_orig={reset_to_orig}): overall rate {comparator.summary.get('overall', {}).get('match_rate')}%", component="COMPARE")
+
+    return JSONResponse({
+        "status": "success",
+        "category_states": comparator.category_states,
+        "summary": comparator.summary,
+        "by_category": results
     })
 
 @app.get("/api/grid/{category}")

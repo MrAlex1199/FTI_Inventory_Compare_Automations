@@ -339,15 +339,15 @@ document.addEventListener("DOMContentLoaded", () => {
         showToast("กำลังเริ่มเปรียบเทียบข้อมูลทุกหมวดหมู่ (HW, SW, UPS)...", "info");
 
         try {
-            const categories = ["hw", "sw", "ups"];
-            for (const cat of categories) {
-                try {
-                    await fetch(`/api/compare/${cat}`, { method: "POST" });
-                } catch (e) {
-                    console.warn(`Compare failed for ${cat}:`, e);
-                }
-            }
-            showToast("เปรียบเทียบข้อมูลครบทั้ง 3 หมวดหมู่เรียบร้อยแล้ว!", "success");
+            const res = await fetch("/api/compare-all?reset_to_orig=true", { method: "POST" });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.detail || "การเปรียบเทียบล้มเหลว");
+
+            const overall = (data.summary && data.summary.overall) || {};
+            const rate = overall.match_rate || 0;
+            const mismatches = overall.mismatched_records || 0;
+
+            showToast(`เปรียบเทียบครบ 3 หมวดแล้ว! ตรงกัน ${rate}% (พบจุดต่างที่รอตรวจสอบ ${mismatches} รายการ)`, "info");
             await fetchSystemState();
         } catch (err) {
             showToast(`เกิดข้อผิดพลาดในการเปรียบเทียบ: ${err.message}`, "error");
