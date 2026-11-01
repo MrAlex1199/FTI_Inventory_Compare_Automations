@@ -20,7 +20,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const elements = {
         // Sidebar & App Version
         appSidebar: document.getElementById("app-sidebar"),
-        btnToggleSidebar: document.getElementById("btn-toggle-sidebar"),
         btnTopbarSidebarToggle: document.getElementById("btn-topbar-sidebar-toggle"),
         brandVersion: document.getElementById("brand-version"),
         settingsAppVersion: document.getElementById("settings-app-version"),
@@ -194,13 +193,6 @@ document.addEventListener("DOMContentLoaded", () => {
             elements.appSidebar.classList.remove("collapsed");
         }
         localStorage.setItem("fti_sidebar_collapsed", collapsed ? "true" : "false");
-    }
-
-    if (elements.btnToggleSidebar) {
-        elements.btnToggleSidebar.addEventListener("click", () => {
-            const isCollapsed = elements.appSidebar.classList.contains("collapsed");
-            setSidebarCollapsed(!isCollapsed);
-        });
     }
 
     if (elements.btnTopbarSidebarToggle) {
