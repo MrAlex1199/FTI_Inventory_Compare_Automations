@@ -340,6 +340,11 @@ class InventoryComparator:
         cat = rec["category"]
         cells = rec["cells"]
         aid, emp_id, emp_name, dept, sn = self._get_key_fields(cat, cells)
+        rec["asset_id"] = aid
+        rec["it_emp_id"] = emp_id
+        rec["it_emp_name"] = emp_name
+        rec["it_dept"] = dept
+        rec["it_sn"] = sn
 
         # Baseline evaluation against ERP
         is_match, m_type, diff_fields, ax_copy = self._evaluate_values_against_erp(aid, emp_id, dept)

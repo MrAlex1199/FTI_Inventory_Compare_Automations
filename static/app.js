@@ -856,7 +856,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (isMismatchMode) {
                 // Mismatch Inspector View: Clear Side-by-Side Comparison
-                const aid = r.asset_id || r.cells["Asset_Number"] || r.cells["License_Key"] || "-";
+                const aid = r.asset_id || (r.cells && (r.cells["เลขที่ทรัพย์สิน"] || r.cells["Asset_Number"] || r.cells["License_Key"])) || (ax && ax.asset_id) || "-";
                 const itEmp = r.it_emp_id || "-";
                 const itName = r.it_emp_name || "-";
                 const itDept = r.it_dept || "-";
@@ -1123,7 +1123,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let html = `
             <div class="side-item-group">
                 <div class="side-item-label">รหัสสินทรัพย์ (Asset ID):</div>
-                <div class="side-item-val" style="color: var(--blue-primary); font-family: monospace;">${ax.asset_id || "-"}</div>
+                <div class="side-item-val" style="color: var(--blue-primary); font-family: monospace;">${rec.asset_id || (ax && ax.asset_id) || (rec.cells && (rec.cells["เลขที่ทรัพย์สิน"] || rec.cells["Asset_Number"])) || "-"}</div>
             </div>
             <div class="side-item-group">
                 <div class="side-item-label">สถานะในระบบ ERP (AX):</div>

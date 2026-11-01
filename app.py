@@ -367,6 +367,7 @@ async def get_category_grid(
 
     for r in paginated_recs:
         aid, emp_id, emp_name, dept, sn = comparator._get_key_fields(category, r.get("cells", {}))
+        r["asset_id"] = aid
         r["it_emp_id"] = emp_id
         r["it_emp_name"] = emp_name
         r["it_dept"] = dept
