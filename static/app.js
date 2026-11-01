@@ -458,10 +458,13 @@ document.addEventListener("DOMContentLoaded", () => {
             const el = document.getElementById(elId);
             if (!el) return;
             const st = states[cat];
-            const sum = (data.summary && data.summary[cat]) || {};
+            const byCat = (data.summary && data.summary.by_category) || {};
+            const sum = byCat[cat] || (data.summary && data.summary[cat]) || {};
             if (st === "compared") {
                 const rate = sum.match_rate || 0;
-                el.textContent = `เทียบแล้ว ${rate.toFixed(1)}% (ตรง ${sum.matched || 0} | ต่าง ${sum.mismatches || 0})`;
+                const matched = sum.matched || 0;
+                const mismatched = sum.mismatched !== undefined ? sum.mismatched : (sum.mismatches || 0);
+                el.textContent = `เทียบแล้ว ${rate.toFixed(1)}% (ตรง ${matched.toLocaleString()} | ต่าง ${mismatched.toLocaleString()})`;
             } else if (st === "stale") {
                 el.textContent = "ไฟล์ Master เปลี่ยน รอเทียบใหม่";
             } else if (files[cat] && files[cat].loaded) {
@@ -506,6 +509,8 @@ document.addEventListener("DOMContentLoaded", () => {
     // =========================================================================
     function updateExecutiveDashboard(data) {
         const summary = data.summary || {};
+        const overall = summary.overall || {};
+        const byCat = summary.by_category || {};
         const states = data.category_states || {};
         const files = data.files || {};
 
@@ -514,13 +519,16 @@ document.addEventListener("DOMContentLoaded", () => {
         let totalMismatches = 0;
         let totalExcluded = 0;
         let totalUserEdited = 0;
+        let comparedCount = 0;
 
         ["hw", "sw", "ups"].forEach(cat => {
-            const s = summary[cat];
-            if (s) {
-                totalRecords += (s.total_records || 0);
+            const s = byCat[cat] || summary[cat];
+            const isCompared = states[cat] === "compared";
+            if (isCompared && s) {
+                comparedCount++;
+                totalRecords += (s.initial_total || (files[cat] ? files[cat].rows : 0) || 0);
                 totalMatched += (s.matched || 0);
-                totalMismatches += (s.mismatches || 0);
+                totalMismatches += (s.mismatched !== undefined ? s.mismatched : (s.mismatches || 0));
                 totalExcluded += (s.excluded || 0);
                 totalUserEdited += (s.user_edited || 0);
             } else if (files[cat] && files[cat].rows) {
@@ -528,8 +536,17 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
+        // If backend already computed overall summary and categories were compared, use overall directly
+        if (overall.total_initial_records && comparedCount > 0) {
+            totalRecords = overall.total_initial_records;
+            if (overall.matched_records !== undefined) totalMatched = overall.matched_records;
+            if (overall.mismatched_records !== undefined) totalMismatches = overall.mismatched_records;
+            if (overall.excluded_records !== undefined) totalExcluded = overall.excluded_records;
+            if (overall.user_edited_records !== undefined) totalUserEdited = overall.user_edited_records;
+        }
+
         const activeTotal = totalMatched + totalMismatches;
-        const overallRate = activeTotal > 0 ? ((totalMatched / activeTotal) * 100) : 0;
+        const overallRate = activeTotal > 0 ? ((totalMatched / activeTotal) * 100) : (overall.match_rate || 0);
 
         const elTotal = document.getElementById("exec-kpi-total");
         const elRate = document.getElementById("exec-kpi-rate");
@@ -539,11 +556,26 @@ document.addEventListener("DOMContentLoaded", () => {
         const elFixed = document.getElementById("exec-kpi-fixed");
 
         if (elTotal) elTotal.textContent = totalRecords.toLocaleString();
-        if (elRate) elRate.textContent = `${overallRate.toFixed(1)}%`;
-        if (elBar) elBar.style.width = `${Math.min(100, Math.max(0, overallRate))}%`;
-        if (elMatchedCount) elMatchedCount.textContent = `ตรงกัน ${totalMatched.toLocaleString()} จาก ${activeTotal.toLocaleString()} รายการ`;
-        if (elMismatch) elMismatch.textContent = totalMismatches.toLocaleString();
-        if (elFixed) elFixed.textContent = (totalExcluded + totalUserEdited).toLocaleString();
+
+        if (comparedCount === 0) {
+            if (elRate) elRate.textContent = "รอเริ่มเทียบ";
+            if (elBar) elBar.style.width = "0%";
+            if (elMatchedCount) elMatchedCount.textContent = 'กดปุ่ม "⚡ เปรียบเทียบทั้งหมด" ด้านล่าง';
+            if (elMismatch) elMismatch.textContent = "-";
+            if (elFixed) elFixed.textContent = "-";
+        } else {
+            if (elRate) elRate.textContent = `${overallRate.toFixed(1)}%`;
+            if (elBar) elBar.style.width = `${Math.min(100, Math.max(0, overallRate))}%`;
+            if (elMatchedCount) {
+                if (comparedCount === 3) {
+                    elMatchedCount.textContent = `ตรงกัน ${totalMatched.toLocaleString()} จาก ${activeTotal.toLocaleString()} รายการ (ครบ 3 หมวด)`;
+                } else {
+                    elMatchedCount.textContent = `ตรงกัน ${totalMatched.toLocaleString()} จาก ${activeTotal.toLocaleString()} รายการ (${comparedCount}/3 หมวด)`;
+                }
+            }
+            if (elMismatch) elMismatch.textContent = totalMismatches.toLocaleString();
+            if (elFixed) elFixed.textContent = (totalExcluded + totalUserEdited).toLocaleString();
+        }
 
         // Update Stepper Progress
         const isMasterLoaded = files.master && files.master.loaded;
