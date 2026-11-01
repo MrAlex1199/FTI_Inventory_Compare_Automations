@@ -220,6 +220,26 @@ async def serve_index():
             return HTMLResponse(content=f.read())
     return HTMLResponse("<h1>FTI IT Asset Inventory Compare System</h1><p>UI loading...</p>")
 
+@app.get("/api/version")
+async def get_system_version():
+    """Retrieve application version and build metadata."""
+    v_path = os.path.join(BASE_DIR, "version.json")
+    if not os.path.exists(v_path):
+        v_path = os.path.join(STATIC_DIR, "version.json")
+    if os.path.exists(v_path):
+        try:
+            with open(v_path, "r", encoding="utf-8") as f:
+                return JSONResponse(json.load(f))
+        except Exception:
+            pass
+    return JSONResponse({
+        "version": "2.1.0",
+        "build_number": 1,
+        "build_date": "2026.11.01",
+        "compiled_at": "2026-11-01 14:35:00",
+        "display_version": "v2.1.0 (Build 2026.11.01-01)"
+    })
+
 # =========================================================================
 # V2 System State & Comparison API
 # =========================================================================

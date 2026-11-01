@@ -18,44 +18,47 @@
         <!-- ========================================================= -->
         <!-- App Sidebar (Left Navigation)                             -->
         <!-- ========================================================= -->
-        <aside class="app-sidebar">
+        <aside class="app-sidebar" id="app-sidebar">
             <div class="sidebar-header">
                 <div class="brand-badge">
                     <i class="fa-solid fa-file-excel"></i>
                 </div>
                 <div class="brand-meta">
                     <h1 class="brand-title">FTI Compare</h1>
-                    <span class="brand-version">v2.0 Pro Max</span>
+                    <span class="brand-version" id="brand-version">v2.1.0</span>
                 </div>
+                <button class="sidebar-toggle-btn" id="btn-toggle-sidebar" title="พับเก็บ / ขยาย เมนูด้านซ้าย">
+                    <i class="fa-solid fa-angles-left"></i>
+                </button>
             </div>
 
             <nav class="sidebar-nav">
                 <div class="nav-section-label">เมนูหลัก (Workspaces)</div>
-                <button class="nav-item active" data-view="files">
+                <button class="nav-item active" data-view="files" data-tooltip="ไฟล์ข้อมูล (Data Sources)">
                     <i class="fa-solid fa-folder-open nav-icon"></i>
                     <span class="nav-text">ไฟล์ข้อมูล</span>
                     <span class="nav-badge" id="badge-nav-files">4 ไฟล์</span>
                 </button>
 
                 <div class="nav-section-label">หมวดหมู่ทรัพย์สิน</div>
-                <button class="nav-item" data-view="hw">
+                <button class="nav-item" data-view="hw" data-tooltip="Hardware Workspace">
                     <i class="fa-solid fa-desktop nav-icon text-blue"></i>
                     <span class="nav-text">Hardware</span>
                     <span class="nav-status-dot state-empty" id="dot-nav-hw" title="สถานะ"></span>
                 </button>
-                <button class="nav-item" data-view="sw">
+                <button class="nav-item" data-view="sw" data-tooltip="Software Workspace">
                     <i class="fa-solid fa-code nav-icon text-cyan"></i>
                     <span class="nav-text">Software</span>
                     <span class="nav-status-dot state-empty" id="dot-nav-sw" title="สถานะ"></span>
                 </button>
-                <button class="nav-item" data-view="ups">
+                <button class="nav-item" data-view="ups" data-tooltip="UPS & Monitor Workspace">
                     <i class="fa-solid fa-car-battery nav-icon text-amber"></i>
                     <span class="nav-text">UPS & Monitor</span>
                     <span class="nav-status-dot state-empty" id="dot-nav-ups" title="สถานะ"></span>
                 </button>
 
                 <div class="nav-section-label">รายงานและส่งออก</div>
-                <button class="nav-item" data-view="summary">
+                <button class="nav-item" data-view="summary" data-tooltip="สรุป & ดาวน์โหลด (Export Center)">
                     <i class="fa-solid fa-chart-pie nav-icon text-green"></i>
                     <span class="nav-text">สรุป & ดาวน์โหลด</span>
                 </button>
@@ -78,8 +81,13 @@
             <!-- Top App Bar -->
             <header class="app-topbar">
                 <div class="topbar-left">
-                    <h2 class="view-title" id="current-view-title">ไฟล์ข้อมูลที่ใช้งาน (Data Sources)</h2>
-                    <span class="view-desc" id="current-view-desc">ตรวจสอบไฟล์ ERP Master และไฟล์ IT Inventory</span>
+                    <button class="btn-tool sidebar-topbar-toggle" id="btn-topbar-sidebar-toggle" title="พับเก็บ / ขยาย เมนูด้านซ้าย">
+                        <i class="fa-solid fa-bars"></i>
+                    </button>
+                    <div>
+                        <h2 class="view-title" id="current-view-title">ไฟล์ข้อมูลที่ใช้งาน (Data Sources)</h2>
+                        <span class="view-desc" id="current-view-desc">ตรวจสอบไฟล์ ERP Master และไฟล์ IT Inventory</span>
+                    </div>
                 </div>
                 <div class="topbar-right">
                     <!-- Autosave Indicator -->
@@ -477,6 +485,15 @@
                     <button class="btn btn-secondary btn-sm" id="btn-settings-open-logs">
                         <i class="fa-solid fa-terminal"></i> เปิดหน้าต่าง Live Logs
                     </button>
+                </div>
+
+                <div class="settings-group">
+                    <div class="settings-title">ข้อมูลเวอร์ชันโปรแกรม (Build Information)</div>
+                    <div style="font-size: 13px; line-height: 1.8; color: var(--text-secondary); background: var(--bg-app); padding: 12px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-color);">
+                        <div><strong>เวอร์ชันโปรแกรม:</strong> <span id="settings-app-version">v2.1.0</span></div>
+                        <div><strong>หมายเลขบิลด์:</strong> <span id="settings-build-num">Build 1</span></div>
+                        <div><strong>วันที่และเวลาคอมไพล์:</strong> <span id="settings-compile-time">-</span></div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">

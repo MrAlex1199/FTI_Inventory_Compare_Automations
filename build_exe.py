@@ -1,6 +1,8 @@
 import os
 import sys
+import json
 import shutil
+import datetime
 import subprocess
 
 if sys.platform == 'win32':
@@ -9,8 +11,46 @@ if sys.platform == 'win32':
     except Exception:
         pass
 
+def bump_build_version(base_dir: str) -> dict:
+    version_file = os.path.join(base_dir, "version.json")
+    vdata = {
+        "version": "2.1.0",
+        "build_number": 1,
+        "build_date": datetime.datetime.now().strftime("%Y.%m.%d"),
+        "compiled_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "display_version": "v2.1.0 (Build 2026.11.01-01)"
+    }
+    if os.path.exists(version_file):
+        try:
+            with open(version_file, "r", encoding="utf-8") as f:
+                vdata = json.load(f)
+        except Exception:
+            pass
+
+    today_str = datetime.datetime.now().strftime("%Y.%m.%d")
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Increment build counter
+    current_build = vdata.get("build_number", 0) + 1
+    vdata["build_number"] = current_build
+    vdata["build_date"] = today_str
+    vdata["compiled_at"] = now_str
+    vdata["display_version"] = f"v{vdata.get('version', '2.1.0')} (Build {today_str}-{current_build:02d})"
+
+    with open(version_file, "w", encoding="utf-8") as f:
+        json.dump(vdata, f, indent=2, ensure_ascii=False)
+
+    # Also sync into static directory for direct frontend loading
+    static_version = os.path.join(base_dir, "static", "version.json")
+    with open(static_version, "w", encoding="utf-8") as f_static:
+        json.dump(vdata, f_static, indent=2, ensure_ascii=False)
+
+    print(f"Stamping Version: {vdata['display_version']} | Compiled: {now_str}")
+    return vdata
+
 def build_single_exe():
     base_dir = os.path.dirname(os.path.abspath(__file__))
+    vdata = bump_build_version(base_dir)
     temp_dir = os.path.join(os.environ.get('TEMP', 'C:\\Temp'), 'fti_inventory_compare_build')
     dist_dir = os.path.join(temp_dir, 'dist')
     work_dir = os.path.join(temp_dir, 'build')
@@ -48,6 +88,7 @@ def build_single_exe():
         "--workpath", work_dir,
         "--add-data", f"{static_src};static",
         "--add-data", f"{engine_src};engine",
+        "--add-data", f"{os.path.join(base_dir, 'version.json')};.",
         "--hidden-import", "logger_util",
         "--hidden-import", "uvicorn.logging",
         "--hidden-import", "uvicorn.loops",

@@ -18,6 +18,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // DOM Elements Cache
     const elements = {
+        // Sidebar & App Version
+        appSidebar: document.getElementById("app-sidebar"),
+        btnToggleSidebar: document.getElementById("btn-toggle-sidebar"),
+        btnTopbarSidebarToggle: document.getElementById("btn-topbar-sidebar-toggle"),
+        brandVersion: document.getElementById("brand-version"),
+        settingsAppVersion: document.getElementById("settings-app-version"),
+        settingsBuildNum: document.getElementById("settings-build-num"),
+        settingsCompileTime: document.getElementById("settings-compile-time"),
+
         // Theme & App Navigation
         themeToggle: document.getElementById("btn-theme-toggle"),
         navItems: document.querySelectorAll(".nav-item"),
@@ -172,6 +181,65 @@ document.addEventListener("DOMContentLoaded", () => {
             if (txt) txt.textContent = nowCollapsed ? "ขยาย" : "พับเก็บ";
             if (icon) icon.className = nowCollapsed ? "fa-solid fa-chevron-down" : "fa-solid fa-chevron-up";
         });
+    }
+
+    // =========================================================================
+    // Sidebar Collapse / Expand Management (Icon-Rail Mode)
+    // =========================================================================
+    function setSidebarCollapsed(collapsed) {
+        if (!elements.appSidebar) return;
+        if (collapsed) {
+            elements.appSidebar.classList.add("collapsed");
+        } else {
+            elements.appSidebar.classList.remove("collapsed");
+        }
+        localStorage.setItem("fti_sidebar_collapsed", collapsed ? "true" : "false");
+    }
+
+    if (elements.btnToggleSidebar) {
+        elements.btnToggleSidebar.addEventListener("click", () => {
+            const isCollapsed = elements.appSidebar.classList.contains("collapsed");
+            setSidebarCollapsed(!isCollapsed);
+        });
+    }
+
+    if (elements.btnTopbarSidebarToggle) {
+        elements.btnTopbarSidebarToggle.addEventListener("click", () => {
+            const isCollapsed = elements.appSidebar.classList.contains("collapsed");
+            setSidebarCollapsed(!isCollapsed);
+        });
+    }
+
+    // Restore saved sidebar state
+    const savedSidebarCollapsed = localStorage.getItem("fti_sidebar_collapsed") === "true";
+    if (savedSidebarCollapsed) {
+        setSidebarCollapsed(true);
+    }
+
+    // =========================================================================
+    // Dynamic Version & Build Info
+    // =========================================================================
+    async function fetchVersionInfo() {
+        try {
+            const res = await fetch("/api/version");
+            if (res.ok) {
+                const data = await res.json();
+                if (elements.brandVersion) {
+                    elements.brandVersion.textContent = data.display_version || "v2.1.0";
+                }
+                if (elements.settingsAppVersion) {
+                    elements.settingsAppVersion.textContent = data.version || "-";
+                }
+                if (elements.settingsBuildNum) {
+                    elements.settingsBuildNum.textContent = String(data.build_number || "-");
+                }
+                if (elements.settingsCompileTime) {
+                    elements.settingsCompileTime.textContent = data.compiled_at || "-";
+                }
+            }
+        } catch (e) {
+            console.warn("Version fetch failed:", e);
+        }
     }
 
     // =========================================================================
@@ -784,6 +852,9 @@ document.addEventListener("DOMContentLoaded", () => {
     // Side Panel Rendering & Row Actions
     // =========================================================================
     function renderSidePanel(rec) {
+        if (elements.erpSidePanel) {
+            elements.erpSidePanel.classList.remove("collapsed");
+        }
         const ax = rec.ax_data || {};
         const isExcl = rec.is_excluded;
 
@@ -868,6 +939,9 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     elements.btnCloseSidepanel.addEventListener("click", () => {
+        if (elements.erpSidePanel) {
+            elements.erpSidePanel.classList.add("collapsed");
+        }
         elements.sidePanelBody.innerHTML = '<p class="side-panel-empty">คลิกเลือกแถวในตารางเพื่อดูข้อมูลเปรียบเทียบกับ ERP</p>';
     });
 
@@ -880,6 +954,9 @@ document.addEventListener("DOMContentLoaded", () => {
             localStorage.setItem("fti_view_mode", "mismatch");
             elements.btnModeMismatch.classList.add("active");
             elements.btnModeSpreadsheet.classList.remove("active");
+            if (elements.erpSidePanel) {
+                elements.erpSidePanel.classList.add("collapsed");
+            }
             state.gridPage = 1;
             loadCategoryWorkspace(state.activeCategory);
         });
@@ -1175,5 +1252,6 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // Initial Load
+    fetchVersionInfo();
     fetchSystemState();
 });
