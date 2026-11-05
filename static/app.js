@@ -216,9 +216,11 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Restore saved sidebar state
-    const savedSidebarCollapsed = localStorage.getItem("fti_sidebar_collapsed") === "true";
-    if (savedSidebarCollapsed) {
+    // Restore saved sidebar state or responsive default for HD screens (<= 1366px)
+    const storedSidebar = localStorage.getItem("fti_sidebar_collapsed");
+    if (storedSidebar !== null) {
+        setSidebarCollapsed(storedSidebar === "true");
+    } else if (window.innerWidth <= 1366) {
         setSidebarCollapsed(true);
     }
 

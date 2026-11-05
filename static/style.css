@@ -38,9 +38,10 @@
     --font-sans: 'Prompt', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-    /* Layout & Sizing */
-    --sidebar-width: 250px;
-    --topbar-height: 64px;
+    /* Layout & Sizing - HD (1366x768) to FullHD (1920x1080) Precision */
+    --sidebar-width: 220px;
+    --sidebar-collapsed-width: 56px;
+    --topbar-height: 50px;
     --radius-sm: 6px;
     --radius-md: 10px;
     --radius-lg: 14px;
@@ -147,10 +148,10 @@ body {
 }
 
 /* ==========================================================================
-   Collapsed Icon-Rail Mode (~68px)
+   Collapsed Icon-Rail Mode (56px for HD screens)
    ========================================================================== */
 .app-sidebar.collapsed {
-    width: 68px;
+    width: var(--sidebar-collapsed-width);
 }
 
 .app-sidebar.collapsed .brand-meta {
@@ -180,14 +181,14 @@ body {
 .app-sidebar.collapsed .nav-status-dot {
     position: absolute;
     top: 8px;
-    right: 14px;
+    right: 12px;
     width: 8px;
     height: 8px;
 }
 
 .app-sidebar.collapsed .sidebar-footer {
     flex-direction: column;
-    padding: 8px 6px;
+    padding: 8px 4px;
     gap: 6px;
 }
 
@@ -205,7 +206,7 @@ body {
 .app-sidebar.collapsed .nav-item::after {
     content: attr(data-tooltip);
     position: absolute;
-    left: 74px;
+    left: 62px;
     top: 50%;
     transform: translateY(-50%);
     background: #0f172a;
@@ -410,15 +411,16 @@ body {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 0 24px;
+    padding: 0 18px;
     flex-shrink: 0;
     z-index: 10;
 }
 
 .topbar-left {
     display: flex;
+    flex-direction: row;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     min-width: 0;
 }
 
@@ -430,19 +432,19 @@ body {
 }
 
 .view-title {
-    font-size: 16px;
+    font-size: 14.5px;
     font-weight: 700;
     color: var(--text-primary);
-    line-height: 1.25;
+    line-height: 1.2;
     margin: 0;
     white-space: nowrap;
 }
 
 .view-desc {
-    font-size: 11.5px;
+    font-size: 11px;
     color: var(--text-muted);
     line-height: 1.2;
-    margin-top: 2px;
+    margin-top: 1px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -451,7 +453,7 @@ body {
 .topbar-right {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
 }
 
 .autosave-pill {
@@ -517,7 +519,7 @@ body {
     height: 100%;
     flex-direction: column;
     overflow-y: auto;
-    padding: 20px;
+    padding: 14px 18px;
 }
 
 .view-panel.active {
@@ -980,6 +982,58 @@ body {
     background-color: var(--blue-light);
 }
 
+/* Unified Drop Action (Zero-Redundancy Card Dropzone) */
+.unified-drop-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    background-color: var(--bg-app);
+    border: 1px dashed var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    margin-top: 4px;
+}
+
+.unified-drop-action:hover {
+    color: var(--blue-primary);
+    border-color: var(--blue-primary);
+    background-color: var(--blue-light);
+}
+
+.btn-reupload-icon {
+    flex: 0 0 32px !important;
+    height: 32px;
+    padding: 0 !important;
+    border-radius: var(--radius-sm);
+    color: var(--text-muted);
+    border: 1px solid var(--border-color);
+    background: var(--bg-surface);
+}
+
+.btn-reupload-icon:hover {
+    color: var(--blue-primary);
+    border-color: var(--border-focus);
+    background: var(--bg-app);
+}
+
+.btn-danger-soft {
+    background: rgba(220, 38, 38, 0.1);
+    color: #ef4444 !important;
+    border: 1px solid rgba(220, 38, 38, 0.3);
+}
+
+.btn-danger-soft:hover {
+    background: #dc2626;
+    color: #ffffff !important;
+}
+
 /* ==========================================================================
    Executive Dashboard & Command Center
    ========================================================================== */
@@ -1284,6 +1338,111 @@ body {
 /* ==========================================================================
    Category Workspace & Action Bar
    ========================================================================== */
+/* ==========================================================================
+   Workspace Unified Ribbon (Compact Action Bar + Inline KPI Strip)
+   ========================================================================== */
+.workspace-unified-ribbon {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 8px 14px;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow-sm);
+    min-height: 48px;
+    flex-wrap: wrap;
+}
+
+[data-theme="dark"] .workspace-unified-ribbon {
+    background: #111827;
+    border-color: #1f2d42;
+}
+
+.ribbon-actions-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.ribbon-actions-left .btn {
+    padding: 6px 12px;
+    font-size: 12px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: var(--radius-sm);
+}
+
+.ribbon-kpi-center {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 0 !important;
+}
+
+.kpi-ribbon-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--bg-app);
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    font-size: 11.5px;
+    height: 30px;
+    font-variant-numeric: tabular-nums;
+}
+
+[data-theme="dark"] .kpi-ribbon-pill {
+    background: #0f172a;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+.ribbon-kpi-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.ribbon-kpi-val {
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.mini-track {
+    width: 36px;
+    height: 5px;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-left: 2px;
+}
+
+[data-theme="dark"] .mini-track {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.mini-track .bento-progress-bar {
+    height: 100%;
+    background: #10b981;
+    border-radius: 999px;
+    transition: width 0.3s ease;
+}
+
+.ribbon-actions-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
 .workspace-action-bar {
     display: flex;
     align-items: center;
@@ -2664,3 +2823,105 @@ tr.row-excluded td {
 .toast-card.success { border-left: 4px solid var(--green-success); }
 .toast-card.error { border-left: 4px solid var(--red-danger); }
 .toast-card.warning { border-left: 4px solid var(--amber-warn); }
+
+/* ==========================================================================
+   HD (1366x768 / 1280x720) to FullHD (1920x1080) Precision Responsiveness
+   ========================================================================== */
+#view-category {
+    overflow-y: hidden;
+    padding: 10px 16px;
+}
+
+.spreadsheet-table td,
+.spreadsheet-table th,
+.kpi-ribbon-pill,
+.exec-kpi-val,
+.master-stat-val,
+.file-metric strong {
+    font-variant-numeric: tabular-nums;
+}
+
+/* HD Breakpoint (1366px and below) */
+@media (max-width: 1366px) {
+    .view-panel {
+        padding: 12px 14px;
+    }
+    .compact-control-strip {
+        padding: 8px 14px;
+        margin-bottom: 12px;
+    }
+    .data-sources-split-layout {
+        margin-bottom: 16px;
+        gap: 12px;
+    }
+    .split-zone-master {
+        flex: 0 0 320px;
+    }
+    .file-card {
+        padding: 14px 16px;
+    }
+    .hero-master-stats {
+        padding: 8px 10px;
+        margin: 6px 0 8px 0;
+    }
+    .master-stat-val {
+        font-size: 22px;
+    }
+    .executive-dashboard {
+        margin-top: 14px;
+        gap: 14px;
+    }
+    .exec-kpi-grid {
+        gap: 12px;
+    }
+    .exec-kpi-card {
+        padding: 12px 14px;
+    }
+    .exec-kpi-val {
+        font-size: 22px;
+    }
+    .workspace-unified-ribbon {
+        padding: 6px 10px;
+        gap: 8px;
+        min-height: 44px;
+    }
+    .ribbon-actions-left .btn {
+        padding: 5px 10px;
+        font-size: 11.5px;
+        height: 30px;
+    }
+    .kpi-ribbon-pill {
+        height: 28px;
+        padding: 3px 8px;
+        font-size: 11px;
+    }
+    .spreadsheet-toolbar {
+        margin-bottom: 6px;
+    }
+    .grid-filter-pill {
+        padding: 4px 10px;
+        font-size: 11.5px;
+    }
+}
+
+/* FullHD Breakpoint (1920px and above) */
+@media (min-width: 1920px) {
+    .view-panel {
+        padding: 20px 28px;
+    }
+    .split-zone-master {
+        flex: 0 0 380px;
+    }
+    .targets-3col-grid {
+        gap: 20px;
+    }
+    .exec-kpi-card {
+        padding: 20px 24px;
+    }
+    .exec-kpi-val {
+        font-size: 30px;
+    }
+    .workspace-unified-ribbon {
+        padding: 10px 18px;
+    }
+}
