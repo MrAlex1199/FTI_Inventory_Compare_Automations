@@ -314,6 +314,43 @@
                             </div>
                         </div>
 
+                        <!-- Visual Analytics Center: Interactive 4-Chart Switcher Deck -->
+                        <div class="exec-analytics-deck" id="exec-analytics-deck">
+                            <div class="analytics-deck-header">
+                                <div class="analytics-title-wrap">
+                                    <div class="analytics-icon-badge bg-blue-subtle text-blue">
+                                        <i class="fa-solid fa-chart-pie"></i>
+                                    </div>
+                                    <div>
+                                        <h4 class="analytics-deck-title">ศูนย์วิเคราะห์ภาพรวมข้อมูลและสถิติ (Visual Analytics Center)</h4>
+                                        <span class="analytics-deck-desc">แสดงข้อมูลสถิติเชิงลึก พร้อมตัวเลือกสลับดูกราฟ 4 รูปแบบอัจฉริยะ</span>
+                                    </div>
+                                </div>
+                                <div class="chart-type-switcher" id="dashboard-chart-switcher">
+                                    <button class="chart-tab-btn active" data-chart="donut" title="กราฟสัดส่วนสถานะรวม">
+                                        <i class="fa-solid fa-chart-pie"></i> สัดส่วนสถานะ (Donut)
+                                    </button>
+                                    <button class="chart-tab-btn" data-chart="grouped_bar" title="กราฟแท่งเปรียบเทียบหมวด HW / SW / UPS">
+                                        <i class="fa-solid fa-chart-column"></i> เปรียบเทียบหมวดหมู่ (Bar)
+                                    </button>
+                                    <button class="chart-tab-btn" data-chart="stacked" title="กราฟสัดส่วนความสมบูรณ์ 100% รายหมวด">
+                                        <i class="fa-solid fa-bars-progress"></i> ความสมบูรณ์ 100%
+                                    </button>
+                                    <button class="chart-tab-btn" data-chart="breakdown" title="วิเคราะห์สาเหตุและแผนกที่พบจุดต่างสูงสุด">
+                                        <i class="fa-solid fa-triangle-exclamation"></i> วิเคราะห์จุดต่าง (Root Cause)
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="analytics-deck-body">
+                                <div class="chart-viewport-box" id="chart-viewport-box">
+                                    <div class="chart-loading-state" id="chart-loading-state">
+                                        <i class="fa-solid fa-circle-notch fa-spin"></i> กำลังประมวลผลข้อมูลกราฟสถิติ...
+                                    </div>
+                                    <div class="chart-render-container" id="chart-render-container" style="display: none;"></div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Lower Control Deck: Quick Actions & Workflow Stepper -->
                         <div class="exec-deck-grid">
                             <!-- Quick Action Center -->
@@ -463,7 +500,7 @@
                         </div>
                     </div>
 
-                    <!-- Spreadsheet Toolbar -->
+                    <!-- Spreadsheet Toolbar with Source Filter & Sort By Controls -->
                     <div class="spreadsheet-toolbar">
                         <div class="filter-pills-row">
                             <button class="grid-filter-pill active" data-filter="all">ทั้งหมด</button>
@@ -472,9 +509,41 @@
                             <button class="grid-filter-pill" data-filter="excluded"><i class="fa-solid fa-filter-circle-xmark text-amber"></i> ข้อมูลที่ตัดออก</button>
                             <button class="grid-filter-pill" data-filter="user_edited"><i class="fa-solid fa-user-pen text-cyan"></i> แก้ไขเอง</button>
                         </div>
-                        <div class="search-box-wrap">
-                            <i class="fa-solid fa-magnifying-glass search-icon"></i>
-                            <input type="text" id="grid-search-input" placeholder="ค้นหาทุกคอลัมน์ในตาราง...">
+                        <div class="toolbar-utility-group">
+                            <!-- Source Switcher (Scan vs DB vs ERP Master) -->
+                            <div class="toolbar-select-wrap" title="สลับแหล่งข้อมูล: ผลลัพธ์สแกนล่าสุด vs ฐานข้อมูล SQLite vs ERP Master">
+                                <i class="fa-solid fa-database text-blue"></i>
+                                <select id="grid-source-select" class="toolbar-select">
+                                    <option value="latest_scan" selected>⚡ สแกนล่าสุด (Scan)</option>
+                                    <option value="db_saved">🗄️ ฐานข้อมูล (SQLite DB)</option>
+                                    <option value="erp_master">🏛️ ฐานข้อมูล ERP Master</option>
+                                </select>
+                            </div>
+
+                            <!-- Sort By Dropdown + Asc/Desc Button -->
+                            <div class="toolbar-sort-group">
+                                <div class="toolbar-select-wrap" title="เรียงลำดับข้อมูล">
+                                    <i class="fa-solid fa-arrow-down-short-wide text-amber"></i>
+                                    <select id="grid-sort-select" class="toolbar-select">
+                                        <option value="row_index" selected>เรียงตาม: ลำดับแถว (#)</option>
+                                        <option value="status">สถานะ (จุดต่างขึ้นก่อน)</option>
+                                        <option value="asset_id">รหัสทรัพย์สิน (Asset ID)</option>
+                                        <option value="mismatch_type">ประเภทจุดต่าง</option>
+                                        <option value="emp_id">รหัสพนักงาน</option>
+                                        <option value="emp_name">ชื่อผู้ใช้งาน</option>
+                                        <option value="dept">แผนก/สถานที่เก็บ</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-tool" id="btn-sort-order" title="สลับ น้อยไปมาก / มากไปน้อย (Asc/Desc)">
+                                    <i class="fa-solid fa-arrow-up-a-z" id="sort-order-icon"></i>
+                                </button>
+                            </div>
+
+                            <!-- Search Box -->
+                            <div class="search-box-wrap">
+                                <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                                <input type="text" id="grid-search-input" placeholder="ค้นหาทุกคอลัมน์...">
+                            </div>
                         </div>
                     </div>
 

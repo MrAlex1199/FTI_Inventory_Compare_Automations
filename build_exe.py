@@ -105,6 +105,7 @@ def build_single_exe():
         "--hidden-import", "jinja2",
         "--hidden-import", "python_multipart",
         "--hidden-import", "starlette",
+        "--hidden-import", "sqlite3",
         "--hidden-import", "engine.comparator",
         "--hidden-import", "engine.report_generator",
         main_script

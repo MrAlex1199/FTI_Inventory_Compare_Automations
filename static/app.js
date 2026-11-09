@@ -10,6 +10,11 @@ document.addEventListener("DOMContentLoaded", () => {
         gridSearch: "",
         gridPage: 1,
         gridPageSize: 50,
+        gridSourceMode: "latest_scan", // 'latest_scan', 'db_saved', 'erp_master'
+        gridSortBy: "row_index",
+        gridSortOrder: "asc",
+        chartType: "donut", // 'donut', 'grouped_bar', 'stacked', 'breakdown'
+        analyticsData: null,
         viewMode: localStorage.getItem("fti_view_mode") || "mismatch", // 'mismatch' (default) or 'spreadsheet'
         selectedRecord: null,
         systemState: null,
@@ -90,6 +95,10 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Spreadsheet Grid & Toolbar
         gridFilterPills: document.querySelectorAll(".grid-filter-pill"),
+        gridSourceSelect: document.getElementById("grid-source-select"),
+        gridSortSelect: document.getElementById("grid-sort-select"),
+        btnSortOrder: document.getElementById("btn-sort-order"),
+        sortOrderIcon: document.getElementById("sort-order-icon"),
         gridSearchInput: document.getElementById("grid-search-input"),
         spreadsheetTable: document.getElementById("spreadsheet-table"),
         spreadsheetThead: document.getElementById("spreadsheet-thead"),
@@ -637,9 +646,203 @@ document.addEventListener("DOMContentLoaded", () => {
                 chip3.textContent = "รอขั้นตอนที่ 2";
             }
         }
+        // Update Visual Analytics Charts
+        renderDashboardAnalytics();
     }
 
-    function updateWorkspaceControls(cat) {
+    function syncSortControlsUI() {
+        if (elements.gridSortSelect) {
+            elements.gridSortSelect.value = state.gridSortBy;
+        }
+        if (elements.sortOrderIcon) {
+            elements.sortOrderIcon.className = (state.gridSortOrder === "desc") ? "fa-solid fa-arrow-down-z-a" : "fa-solid fa-arrow-up-a-z";
+        }
+    }
+
+    async function renderDashboardAnalytics() {
+        const viewportBox = document.getElementById("chart-viewport-box");
+        const loadingState = document.getElementById("chart-loading-state");
+        const renderContainer = document.getElementById("chart-render-container");
+        if (!renderContainer) return;
+
+        try {
+            const res = await fetch("/api/analytics/charts");
+            if (!res.ok) return;
+            const data = await res.json();
+            state.analyticsData = data;
+
+            if (loadingState) loadingState.style.display = "none";
+            renderContainer.style.display = "block";
+            drawActiveChart(data, state.chartType);
+        } catch (e) {
+            if (loadingState) {
+                loadingState.innerHTML = '<span style="color: var(--text-muted);">ยังไม่มีข้อมูลวิเคราะห์กราฟ</span>';
+            }
+        }
+    }
+
+    function drawActiveChart(data, type) {
+        const container = document.getElementById("chart-render-container");
+        if (!container) return;
+
+        if (type === "donut") {
+            const donut = data.donut_chart || [];
+            const ov = data.summary || {};
+            const total = (donut.reduce((acc, curr) => acc + curr.value, 0)) || 1;
+            const rate = ov.match_rate || 0.0;
+
+            // Generate SVG Donut Path
+            let cumAngle = 0;
+            const size = 180;
+            const r = 70;
+            const cx = 90;
+            const cy = 90;
+            const strokeWidth = 22;
+
+            let pathsSvg = "";
+            donut.forEach(seg => {
+                if (seg.value <= 0) return;
+                const pct = seg.value / total;
+                const angle = pct * 360;
+                const radStart = (cumAngle - 90) * Math.PI / 180;
+                const radEnd = (cumAngle + angle - 90) * Math.PI / 180;
+                cumAngle += angle;
+
+                const x1 = cx + r * Math.cos(radStart);
+                const y1 = cy + r * Math.sin(radStart);
+                const x2 = cx + r * Math.cos(radEnd);
+                const y2 = cy + r * Math.sin(radEnd);
+                const largeArc = angle > 180 ? 1 : 0;
+
+                // Handle full 360 circle
+                if (angle >= 359.9) {
+                    pathsSvg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="${strokeWidth}" />`;
+                } else {
+                    pathsSvg += `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}" fill="none" stroke="${seg.color}" stroke-width="${strokeWidth}" stroke-linecap="round" />`;
+                }
+            });
+
+            if (!pathsSvg) {
+                pathsSvg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(148, 163, 184, 0.2)" stroke-width="${strokeWidth}" />`;
+            }
+
+            let legendHtml = donut.map(seg => `
+                <div class="chart-legend-item">
+                    <span class="legend-dot" style="background: ${seg.color};"></span>
+                    <span class="legend-label">${seg.label}</span>
+                    <strong class="legend-val">${seg.value.toLocaleString()} <span style="font-size: 11px; font-weight: 500; color: var(--text-muted);">(${((seg.value/total)*100).toFixed(1)}%)</span></strong>
+                </div>
+            `).join("");
+
+            container.innerHTML = `
+                <div class="donut-layout">
+                    <div class="donut-svg-wrap">
+                        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+                            ${pathsSvg}
+                        </svg>
+                        <div class="donut-center-metric">
+                            <div class="donut-center-val text-green">${rate.toFixed(1)}%</div>
+                            <div class="donut-center-sub">ความตรงกันรวม</div>
+                        </div>
+                    </div>
+                    <div class="chart-legend-grid">
+                        ${legendHtml}
+                    </div>
+                </div>
+            `;
+        } else if (type === "grouped_bar") {
+            const barData = data.grouped_bar_chart || [];
+            let rowsHtml = barData.map(b => {
+                const tot = b.total || 1;
+                const mPct = ((b.matched / tot) * 100).toFixed(1);
+                const diffPct = ((b.mismatched / tot) * 100).toFixed(1);
+                const exPct = ((b.excluded / tot) * 100).toFixed(1);
+
+                return `
+                    <div class="bar-cat-row">
+                        <div class="bar-cat-header">
+                            <span class="bar-cat-name"><i class="fa-solid fa-folder"></i> ${b.category_name}</span>
+                            <span>อัตราตรงกัน: <strong class="text-green">${b.match_rate}%</strong> (${b.matched.toLocaleString()} จาก ${b.total.toLocaleString()} รายการ)</span>
+                        </div>
+                        <div class="bar-multi-track">
+                            <div class="bar-seg matched" style="width: ${mPct}%;" title="ตรงกัน: ${b.matched} (${mPct}%)"></div>
+                            <div class="bar-seg mismatched" style="width: ${diffPct}%;" title="จุดต่าง: ${b.mismatched} (${diffPct}%)"></div>
+                            <div class="bar-seg excluded" style="width: ${exPct}%;" title="ตัดออก: ${b.excluded} (${exPct}%)"></div>
+                        </div>
+                    </div>
+                `;
+            }).join("");
+
+            container.innerHTML = `
+                <div class="bar-chart-container">
+                    <div style="display: flex; gap: 16px; font-size: 12px; margin-bottom: 4px; justify-content: flex-end;">
+                        <span style="display: inline-flex; align-items: center; gap: 6px;"><span class="legend-dot" style="background: #10b981;"></span> ตรงกัน (Tab 3)</span>
+                        <span style="display: inline-flex; align-items: center; gap: 6px;"><span class="legend-dot" style="background: #ef4444;"></span> พบจุดต่าง (Diff)</span>
+                        <span style="display: inline-flex; align-items: center; gap: 6px;"><span class="legend-dot" style="background: #f59e0b;"></span> ตัดออก (Tab 4)</span>
+                    </div>
+                    ${rowsHtml}
+                </div>
+            `;
+        } else if (type === "stacked") {
+            const stacked = data.stacked_progress_chart || [];
+            let html = stacked.map(s => `
+                <div class="bar-cat-row" style="margin-bottom: 12px;">
+                    <div class="bar-cat-header">
+                        <span class="bar-cat-name">${s.category_name}</span>
+                        <strong class="text-green" style="font-size: 14px;">${s.rate}%</strong>
+                    </div>
+                    <div class="bento-progress-track" style="height: 12px; border-radius: 999px;">
+                        <div class="bento-progress-bar" style="width: ${s.rate}%; background: linear-gradient(90deg, #10b981, #059669);"></div>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 2px;">
+                        <span>สมบูรณ์แล้ว ${s.matched_pct}%</span>
+                        <span>รอดำเนินการ Auto-Fix ${s.mismatch_pct}%</span>
+                    </div>
+                </div>
+            `).join("");
+
+            container.innerHTML = `<div class="bar-chart-container" style="padding: 10px 0;">${html}</div>`;
+        } else if (type === "breakdown") {
+            const bd = data.mismatch_breakdown || {};
+            const topReasons = bd.top_reasons || [];
+            const topDepts = bd.top_departments || [];
+            const maxR = topReasons.length > 0 ? topReasons[0].count : 1;
+            const maxD = topDepts.length > 0 ? topDepts[0].count : 1;
+
+            let reasonsHtml = topReasons.map(r => `
+                <div class="breakdown-item">
+                    <span class="breakdown-item-name" title="${r.reason}">${r.reason}</span>
+                    <div class="breakdown-item-bar-wrap">
+                        <div class="breakdown-item-bar" style="width: ${Math.round((r.count/maxR)*100)}%;"></div>
+                    </div>
+                    <span class="breakdown-item-val">${r.count.toLocaleString()}</span>
+                </div>
+            `).join("") || '<p style="font-size: 12px; color: var(--text-muted);">ไม่มีรายการจุดต่างค้างอยู่</p>';
+
+            let deptsHtml = topDepts.map(d => `
+                <div class="breakdown-item">
+                    <span class="breakdown-item-name" title="${d.department}">${d.department}</span>
+                    <div class="breakdown-item-bar-wrap">
+                        <div class="breakdown-item-bar" style="width: ${Math.round((d.count/maxD)*100)}%; background: #f59e0b;"></div>
+                    </div>
+                    <span class="breakdown-item-val">${d.count.toLocaleString()}</span>
+                </div>
+            `).join("") || '<p style="font-size: 12px; color: var(--text-muted);">ไม่มีรายการจุดต่างค้างอยู่</p>';
+
+            container.innerHTML = `
+                <div class="breakdown-2col-grid">
+                    <div class="breakdown-card">
+                        <div class="breakdown-card-title"><i class="fa-solid fa-triangle-exclamation text-red"></i> ประเภทจุดต่างสูงสุด (Top Mismatch Reasons)</div>
+                        <div class="breakdown-list">${reasonsHtml}</div>
+                    </div>
+                    <div class="breakdown-card">
+                        <div class="breakdown-card-title"><i class="fa-solid fa-building-user text-amber"></i> แผนกที่พบจุดต่างสูงสุด (Top Departments)</div>
+                        <div class="breakdown-list">${deptsHtml}</div>
+                    </div>
+                </div>
+            `;
+        }
+    }
         const st = (state.systemState && state.systemState.category_states && state.systemState.category_states[cat]) || "empty";
         const badge = elements.workspaceStatusBadge;
 
@@ -755,6 +958,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const params = new URLSearchParams({
             filter_type: state.gridFilter,
+            source_mode: state.gridSourceMode,
+            sort_by: state.gridSortBy,
+            sort_order: state.gridSortOrder,
             search: state.gridSearch,
             page: state.gridPage,
             page_size: state.gridPageSize
@@ -777,30 +983,56 @@ document.addEventListener("DOMContentLoaded", () => {
         const records = data.records || [];
         const cat = data.category;
         const isMismatchMode = (state.viewMode === "mismatch");
+        const currentSort = state.gridSortBy;
+        const isDesc = (state.gridSortOrder === "desc");
+
+        const getSortIcon = (colKey) => {
+            if (currentSort === colKey) {
+                return `<i class="fa-solid ${isDesc ? 'fa-arrow-down-wide-short' : 'fa-arrow-up-short-wide'} sort-indicator-icon"></i>`;
+            }
+            return `<i class="fa-solid fa-sort sort-indicator-icon" style="opacity: 0.3;"></i>`;
+        };
 
         // 1. Build Header
         if (isMismatchMode) {
             elements.spreadsheetThead.innerHTML = `
                 <tr>
-                    <th class="col-sticky-1" style="width: 45px; text-align: center;">#</th>
-                    <th class="col-sticky-2" style="width: 135px;">สถานะ</th>
-                    <th style="width: 150px;">รหัสทรัพย์สิน (Asset ID)</th>
-                    <th style="width: 190px;">ประเภทจุดต่าง (Mismatch)</th>
-                    <th style="min-width: 250px;">ข้อมูลใน IT Inventory (เดิม/ล่าสุด)</th>
+                    <th class="col-sticky-1 sortable-th ${currentSort === 'row_index' ? 'active-sort' : ''}" data-sort="row_index" style="width: 55px; text-align: center;" title="คลิกเพื่อเรียงตามลำดับแถว"># ${getSortIcon('row_index')}</th>
+                    <th class="col-sticky-2 sortable-th ${currentSort === 'status' ? 'active-sort' : ''}" data-sort="status" style="width: 140px;" title="คลิกเพื่อเรียงตามสถานะ">สถานะ ${getSortIcon('status')}</th>
+                    <th class="sortable-th ${currentSort === 'asset_id' ? 'active-sort' : ''}" data-sort="asset_id" style="width: 160px;" title="คลิกเพื่อเรียงตามรหัสทรัพย์สิน">รหัสทรัพย์สิน (Asset ID) ${getSortIcon('asset_id')}</th>
+                    <th class="sortable-th ${currentSort === 'mismatch_type' ? 'active-sort' : ''}" data-sort="mismatch_type" style="width: 200px;" title="คลิกเพื่อเรียงตามประเภทจุดต่าง">ประเภทจุดต่าง (Mismatch) ${getSortIcon('mismatch_type')}</th>
+                    <th class="sortable-th ${currentSort === 'emp_name' ? 'active-sort' : ''}" data-sort="emp_name" style="min-width: 250px;" title="คลิกเพื่อเรียงตามชื่อผู้ใช้งาน">ข้อมูลใน IT Inventory (เดิม/ล่าสุด) ${getSortIcon('emp_name')}</th>
                     <th style="min-width: 250px;">ข้อมูลในระบบ ERP (AX)</th>
                     <th style="width: 170px; text-align: center;">การจัดการ</th>
                 </tr>
             `;
         } else {
             let thHtml = `
-                <th class="col-sticky-1" style="width: 45px; text-align: center;">#</th>
-                <th class="col-sticky-2" style="width: 140px;">สถานะ</th>
+                <th class="col-sticky-1 sortable-th ${currentSort === 'row_index' ? 'active-sort' : ''}" data-sort="row_index" style="width: 55px; text-align: center;" title="คลิกเพื่อเรียงตามลำดับแถว"># ${getSortIcon('row_index')}</th>
+                <th class="col-sticky-2 sortable-th ${currentSort === 'status' ? 'active-sort' : ''}" data-sort="status" style="width: 140px;" title="คลิกเพื่อเรียงตามสถานะ">สถานะ ${getSortIcon('status')}</th>
             `;
             cols.forEach(col => {
-                thHtml += `<th>${col}</th>`;
+                const isActive = (currentSort === col);
+                thHtml += `<th class="sortable-th ${isActive ? 'active-sort' : ''}" data-sort="${col}" title="คลิกเพื่อเรียงตามคอลัมน์ ${col}">${col} ${getSortIcon(col)}</th>`;
             });
             elements.spreadsheetThead.innerHTML = `<tr>${thHtml}</tr>`;
         }
+
+        // Attach sort header clicks
+        elements.spreadsheetThead.querySelectorAll(".sortable-th").forEach(th => {
+            th.addEventListener("click", () => {
+                const sortField = th.getAttribute("data-sort");
+                if (state.gridSortBy === sortField) {
+                    state.gridSortOrder = (state.gridSortOrder === "asc") ? "desc" : "asc";
+                } else {
+                    state.gridSortBy = sortField;
+                    state.gridSortOrder = "asc";
+                }
+                syncSortControlsUI();
+                state.gridPage = 1;
+                loadCategoryWorkspace(state.activeCategory);
+            });
+        });
 
         // 2. Build Rows
         if (records.length === 0) {
@@ -864,7 +1096,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (isMismatchMode) {
                 // Mismatch Inspector View: Clear Side-by-Side Comparison
-                const aid = r.asset_id || (r.cells && (r.cells["เลขที่ทรัพย์สิน"] || r.cells["Asset_Number"] || r.cells["License_Key"])) || (ax && ax.asset_id) || "-";
+                const aid = r.asset_id || (r.cells && (r.cells["เลขที่ทรัพย์สิน"] || r.cells["รหัสทรัพย์สิน"] || r.cells["Fixed asset number"] || r.cells["Asset ID"] || r.cells["Asset_Number"] || r.cells["License_Key"])) || (ax && (ax.asset_id || ax.ax_asset_id)) || "-";
                 const itEmp = r.it_emp_id || "-";
                 const itName = r.it_emp_name || "-";
                 const itDept = r.it_dept || "-";
@@ -1131,7 +1363,7 @@ document.addEventListener("DOMContentLoaded", () => {
         let html = `
             <div class="side-item-group">
                 <div class="side-item-label">รหัสสินทรัพย์ (Asset ID):</div>
-                <div class="side-item-val" style="color: var(--blue-primary); font-family: monospace;">${rec.asset_id || (ax && ax.asset_id) || (rec.cells && (rec.cells["เลขที่ทรัพย์สิน"] || rec.cells["Asset_Number"])) || "-"}</div>
+                <div class="side-item-val" style="color: var(--blue-primary); font-family: monospace;">${rec.asset_id || (ax && (ax.asset_id || ax.ax_asset_id)) || (rec.cells && (rec.cells["เลขที่ทรัพย์สิน"] || rec.cells["รหัสทรัพย์สิน"] || rec.cells["Fixed asset number"] || rec.cells["Asset ID"] || rec.cells["Asset_Number"] || rec.cells["License_Key"])) || "-"}</div>
             </div>
             <div class="side-item-group">
                 <div class="side-item-label">สถานะในระบบ ERP (AX):</div>
@@ -1598,6 +1830,51 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.btnRefreshLogs.addEventListener("click", fetchLogs);
     elements.btnCloseLogs.addEventListener("click", () => { elements.modalLogs.style.display = "none"; });
     elements.btnDoneLogs.addEventListener("click", () => { elements.modalLogs.style.display = "none"; });
+
+    // Source Mode Switcher (Latest Scan vs SQLite DB vs ERP Master)
+    if (elements.gridSourceSelect) {
+        elements.gridSourceSelect.addEventListener("change", (e) => {
+            state.gridSourceMode = e.target.value;
+            state.gridPage = 1;
+            loadCategoryWorkspace(state.activeCategory);
+        });
+    }
+
+    // Sort By Dropdown
+    if (elements.gridSortSelect) {
+        elements.gridSortSelect.addEventListener("change", (e) => {
+            state.gridSortBy = e.target.value;
+            state.gridPage = 1;
+            loadCategoryWorkspace(state.activeCategory);
+        });
+    }
+
+    // Sort Order Button (Asc / Desc)
+    if (elements.btnSortOrder) {
+        elements.btnSortOrder.addEventListener("click", () => {
+            state.gridSortOrder = (state.gridSortOrder === "asc") ? "desc" : "asc";
+            syncSortControlsUI();
+            state.gridPage = 1;
+            loadCategoryWorkspace(state.activeCategory);
+        });
+    }
+
+    // Chart Switcher Tabs
+    const chartSwitcher = document.getElementById("dashboard-chart-switcher");
+    if (chartSwitcher) {
+        chartSwitcher.querySelectorAll(".chart-tab-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                chartSwitcher.querySelectorAll(".chart-tab-btn").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                state.chartType = btn.getAttribute("data-chart");
+                if (state.analyticsData) {
+                    drawActiveChart(state.analyticsData, state.chartType);
+                } else {
+                    renderDashboardAnalytics();
+                }
+            });
+        });
+    }
 
     // Exit Application
     elements.btnExitApp.addEventListener("click", async () => {

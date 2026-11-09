@@ -1,6 +1,7 @@
 import re
 import os
 import json
+import sqlite3
 import uuid
 import copy
 from typing import Dict, Any, List, Optional, Tuple
@@ -186,12 +187,456 @@ class InventoryComparator:
         self.redo_stack: List[Dict[str, Any]] = []
         self.autosave_path: Optional[str] = None
         self.sources_dir: Optional[str] = None
+        self.db_path: Optional[str] = None
 
         # Filename tracking
         self.master_filename: Optional[str] = None
         self.hw_filename: Optional[str] = None
         self.sw_filename: Optional[str] = None
         self.ups_filename: Optional[str] = None
+
+    def _get_db_connection(self) -> Optional[sqlite3.Connection]:
+        """Obtain connection to local SQLite database, creating schema if needed."""
+        target_path = self.db_path
+        if not target_path and self.autosave_path:
+            dir_name = os.path.dirname(os.path.abspath(self.autosave_path))
+            target_path = os.path.join(dir_name, ".fti_inventory_database.db")
+            self.db_path = target_path
+
+        if not target_path:
+            return None
+
+        try:
+            os.makedirs(os.path.dirname(os.path.abspath(target_path)), exist_ok=True)
+            conn = sqlite3.connect(target_path, timeout=10.0)
+            conn.row_factory = sqlite3.Row
+            with conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS erp_master_assets (
+                        asset_id TEXT PRIMARY KEY,
+                        ax_emp_id TEXT,
+                        ax_emp_name TEXT,
+                        ax_dept TEXT,
+                        ax_loc_code TEXT,
+                        ax_asset_name TEXT,
+                        ax_sn TEXT,
+                        ax_status TEXT,
+                        ax_search_name TEXT,
+                        ax_group TEXT,
+                        is_scrapped INTEGER,
+                        updated_at TEXT
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS inventory_db_records (
+                        uid TEXT PRIMARY KEY,
+                        category TEXT,
+                        row_index INTEGER,
+                        asset_id TEXT,
+                        it_emp_id TEXT,
+                        it_emp_name TEXT,
+                        it_dept TEXT,
+                        it_sn TEXT,
+                        is_match INTEGER,
+                        is_excluded INTEGER,
+                        exclude_reason TEXT,
+                        mismatch_type TEXT,
+                        user_edited_cols TEXT,
+                        cells_json TEXT,
+                        ax_data_json TEXT,
+                        updated_at TEXT
+                    )
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS scan_history_snapshots (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        snapshot_time TEXT,
+                        category TEXT,
+                        total_records INTEGER,
+                        matched_records INTEGER,
+                        mismatched_records INTEGER,
+                        excluded_records INTEGER,
+                        match_rate REAL,
+                        summary_json TEXT
+                    )
+                """)
+            return conn
+        except Exception as e:
+            try:
+                from logger_util import get_system_logger
+                get_system_logger().error(f"Failed to open SQLite database: {e}", component="SQLITE")
+            except Exception:
+                pass
+            return None
+
+    def sync_to_sqlite(self, category: Optional[str] = None):
+        """Sync working memory state (ERP master & category records) into SQLite tables."""
+        conn = self._get_db_connection()
+        if not conn:
+            return
+
+        now_str = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+        try:
+            with conn:
+                # Sync Master Assets if loaded
+                if self.master_dict:
+                    master_rows = []
+                    for aid, m in self.master_dict.items():
+                        master_rows.append((
+                            aid,
+                            m.get("ax_emp_id", ""),
+                            m.get("ax_emp_name", ""),
+                            m.get("ax_dept", ""),
+                            m.get("ax_loc_code", ""),
+                            m.get("ax_asset_name", ""),
+                            m.get("ax_sn", ""),
+                            m.get("ax_status", ""),
+                            m.get("ax_search_name", ""),
+                            m.get("ax_group", ""),
+                            1 if m.get("is_scrapped") else 0,
+                            now_str
+                        ))
+                    conn.executemany("""
+                        INSERT OR REPLACE INTO erp_master_assets (
+                            asset_id, ax_emp_id, ax_emp_name, ax_dept, ax_loc_code,
+                            ax_asset_name, ax_sn, ax_status, ax_search_name, ax_group,
+                            is_scrapped, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, master_rows)
+
+                # Sync Category Records
+                cats = [category] if category else ["hw", "sw", "ups"]
+                for cat in cats:
+                    recs = self.records.get(cat, [])
+                    if not recs:
+                        continue
+                    db_rows = []
+                    for r in recs:
+                        cells = r.get("cells", {})
+                        aid, it_emp, it_name, it_dept, it_sn = self._get_key_fields(cat, cells)
+                        db_rows.append((
+                            r.get("uid"),
+                            cat,
+                            r.get("row_index", 0),
+                            aid,
+                            it_emp,
+                            it_name,
+                            it_dept,
+                            it_sn,
+                            1 if r.get("is_match") is True else (0 if r.get("is_match") is False else None),
+                            1 if r.get("is_excluded") else 0,
+                            r.get("exclude_reason", ""),
+                            r.get("mismatch_type", ""),
+                            json.dumps(r.get("user_edited_cols", []), ensure_ascii=False),
+                            json.dumps(cells, ensure_ascii=False),
+                            json.dumps(r.get("ax_data", {}), ensure_ascii=False),
+                            now_str
+                        ))
+                    conn.executemany("""
+                        INSERT OR REPLACE INTO inventory_db_records (
+                            uid, category, row_index, asset_id, it_emp_id, it_emp_name,
+                            it_dept, it_sn, is_match, is_excluded, exclude_reason,
+                            mismatch_type, user_edited_cols, cells_json, ax_data_json, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """, db_rows)
+
+                    # Record snapshot into scan_history_snapshots
+                    cat_sum = self.summary.get("by_category", {}).get(cat, {})
+                    if cat_sum:
+                        conn.execute("""
+                            INSERT INTO scan_history_snapshots (
+                                snapshot_time, category, total_records, matched_records,
+                                mismatched_records, excluded_records, match_rate, summary_json
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (
+                            now_str,
+                            cat,
+                            cat_sum.get("total_records", len(recs)),
+                            cat_sum.get("matched", 0),
+                            cat_sum.get("mismatched", 0),
+                            cat_sum.get("excluded", 0),
+                            float(cat_sum.get("match_rate", 0.0)),
+                            json.dumps(cat_sum, ensure_ascii=False)
+                        ))
+        except Exception as e:
+            try:
+                from logger_util import get_system_logger
+                get_system_logger().error(f"Sync to SQLite failed: {e}", component="SQLITE", exc_info=True)
+            except Exception:
+                pass
+        finally:
+            conn.close()
+
+    def get_db_records(self, category: str) -> List[Dict[str, Any]]:
+        """Retrieve stored records from SQLite database for the category."""
+        conn = self._get_db_connection()
+        if not conn:
+            return []
+        try:
+            cur = conn.execute("""
+                SELECT * FROM inventory_db_records
+                WHERE category = ?
+                ORDER BY row_index ASC
+            """, (category,))
+            rows = cur.fetchall()
+            results = []
+            for row in rows:
+                try:
+                    cells = json.loads(row["cells_json"]) if row["cells_json"] else {}
+                except Exception:
+                    cells = {}
+                try:
+                    ax_data = json.loads(row["ax_data_json"]) if row["ax_data_json"] else {}
+                except Exception:
+                    ax_data = {}
+                try:
+                    user_edited = json.loads(row["user_edited_cols"]) if row["user_edited_cols"] else []
+                except Exception:
+                    user_edited = []
+
+                is_match_val = None
+                if row["is_match"] is not None:
+                    is_match_val = bool(row["is_match"])
+
+                results.append({
+                    "uid": row["uid"],
+                    "category": row["category"],
+                    "row_index": row["row_index"],
+                    "cells": cells,
+                    "orig_cells": copy.deepcopy(cells),
+                    "user_edited_cols": user_edited,
+                    "manual_exclude": None,
+                    "is_excluded": bool(row["is_excluded"]),
+                    "exclude_reason": row["exclude_reason"] or "",
+                    "is_match": is_match_val,
+                    "mismatch_type": row["mismatch_type"] or "",
+                    "diff_fields": [],
+                    "ax_data": ax_data,
+                    "asset_id": row["asset_id"] or "",
+                    "it_emp_id": row["it_emp_id"] or "",
+                    "it_emp_name": row["it_emp_name"] or "",
+                    "it_dept": row["it_dept"] or "",
+                    "it_sn": row["it_sn"] or "",
+                    "db_updated_at": row["updated_at"]
+                })
+            return results
+        except Exception as e:
+            try:
+                from logger_util import get_system_logger
+                get_system_logger().error(f"Failed to fetch DB records: {e}", component="SQLITE")
+            except Exception:
+                pass
+            return []
+        finally:
+            conn.close()
+
+    def get_erp_master_records(self, limit: int = 5000) -> List[Dict[str, Any]]:
+        """Retrieve ERP Master Asset records from SQLite database."""
+        conn = self._get_db_connection()
+        if not conn:
+            # Fallback to in-memory master_dict
+            res = []
+            for idx, (aid, m) in enumerate(list(self.master_dict.items())[:limit]):
+                res.append({
+                    "uid": f"erp_{aid}",
+                    "category": "erp",
+                    "row_index": idx,
+                    "asset_id": aid,
+                    "it_emp_id": m.get("ax_emp_id", ""),
+                    "it_emp_name": m.get("ax_emp_name", ""),
+                    "it_dept": m.get("ax_dept", ""),
+                    "it_sn": m.get("ax_sn", ""),
+                    "is_match": True if not m.get("is_scrapped") else False,
+                    "is_excluded": bool(m.get("is_scrapped")),
+                    "exclude_reason": "ตัดจำหน่ายใน ERP" if m.get("is_scrapped") else "",
+                    "mismatch_type": "ตัดจำหน่ายใน ERP" if m.get("is_scrapped") else "ข้อมูล ERP Master",
+                    "user_edited_cols": [],
+                    "diff_fields": [],
+                    "ax_data": copy.deepcopy(m),
+                    "cells": {
+                        "เลขที่ทรัพย์สิน": aid,
+                        "ชื่อทรัพย์สิน": m.get("ax_asset_name", ""),
+                        "รหัสพนักงาน": m.get("ax_emp_id", ""),
+                        "ชื่อผู้รับผิดชอบ": m.get("ax_emp_name", ""),
+                        "แผนก/สถานที่": m.get("ax_dept", ""),
+                        "Location": m.get("ax_loc_code", ""),
+                        "Serial Number": m.get("ax_sn", ""),
+                        "สถานะ": m.get("ax_status", ""),
+                        "กลุ่มทรัพย์สิน": m.get("ax_group", "")
+                    }
+                })
+            return res
+
+        try:
+            cur = conn.execute("""
+                SELECT * FROM erp_master_assets
+                ORDER BY asset_id ASC
+                LIMIT ?
+            """, (limit,))
+            rows = cur.fetchall()
+            results = []
+            for idx, r in enumerate(rows):
+                aid = r["asset_id"]
+                is_scrapped = bool(r["is_scrapped"])
+                ax_dict = {
+                    "asset_id": aid,
+                    "ax_emp_id": r["ax_emp_id"] or "",
+                    "ax_emp_name": r["ax_emp_name"] or "",
+                    "ax_dept": r["ax_dept"] or "",
+                    "ax_loc_code": r["ax_loc_code"] or "",
+                    "ax_asset_name": r["ax_asset_name"] or "",
+                    "ax_sn": r["ax_sn"] or "",
+                    "ax_status": r["ax_status"] or "",
+                    "ax_search_name": r["ax_search_name"] or "",
+                    "ax_group": r["ax_group"] or "",
+                    "is_scrapped": is_scrapped
+                }
+                results.append({
+                    "uid": f"erp_{aid}",
+                    "category": "erp",
+                    "row_index": idx,
+                    "asset_id": aid,
+                    "it_emp_id": r["ax_emp_id"] or "",
+                    "it_emp_name": r["ax_emp_name"] or "",
+                    "it_dept": r["ax_dept"] or "",
+                    "it_sn": r["ax_sn"] or "",
+                    "is_match": True if not is_scrapped else False,
+                    "is_excluded": is_scrapped,
+                    "exclude_reason": "ตัดจำหน่ายใน ERP" if is_scrapped else "",
+                    "mismatch_type": "ตัดจำหน่ายใน ERP" if is_scrapped else "ปกติ (ERP Master)",
+                    "user_edited_cols": [],
+                    "diff_fields": [],
+                    "ax_data": ax_dict,
+                    "cells": {
+                        "เลขที่ทรัพย์สิน": aid,
+                        "ชื่อทรัพย์สิน": r["ax_asset_name"] or "",
+                        "รหัสพนักงาน": r["ax_emp_id"] or "",
+                        "ชื่อผู้รับผิดชอบ": r["ax_emp_name"] or "",
+                        "แผนก/สถานที่": r["ax_dept"] or "",
+                        "Location": r["ax_loc_code"] or "",
+                        "Serial Number": r["ax_sn"] or "",
+                        "สถานะ": r["ax_status"] or "",
+                        "กลุ่มทรัพย์สิน": r["ax_group"] or ""
+                    }
+                })
+            return results
+        except Exception as e:
+            try:
+                from logger_util import get_system_logger
+                get_system_logger().error(f"Failed to fetch ERP master assets from DB: {e}", component="SQLITE")
+            except Exception:
+                pass
+            return []
+        finally:
+            conn.close()
+
+    def get_chart_analytics(self) -> Dict[str, Any]:
+        """Compute aggregated multi-chart analytics across categories and SQLite DB."""
+        cats = ["hw", "sw", "ups"]
+        cat_names = {"hw": "Hardware", "sw": "Software", "ups": "UPS & Monitor"}
+
+        # 1. Status breakdown overall
+        ov = self.summary.get("overall", {})
+        matched_count = ov.get("matched_records", 0)
+        mismatched_count = ov.get("mismatched_records", 0)
+        excluded_count = ov.get("excluded_records", 0)
+        total_active = ov.get("total_records", 0)
+        total_initial = ov.get("total_initial_records", total_active + excluded_count)
+        overall_match_rate = ov.get("match_rate", 0.0)
+
+        user_edited_count = 0
+        for c in cats:
+            for r in self.records.get(c, []):
+                if len(r.get("user_edited_cols", [])) > 0:
+                    user_edited_count += 1
+
+        donut_data = [
+            {"label": "ตรงกันสมบูรณ์", "value": matched_count, "color": "#10b981", "key": "match"},
+            {"label": "พบจุดต่าง (Mismatch)", "value": mismatched_count, "color": "#ef4444", "key": "mismatch"},
+            {"label": "ตัดออก (Scrapped)", "value": excluded_count, "color": "#f59e0b", "key": "excluded"},
+            {"label": "แก้ไขเอง", "value": user_edited_count, "color": "#06b6d4", "key": "user_edited"}
+        ]
+
+        # 2. Grouped Bar comparison per category
+        grouped_bar_data = []
+        for c in cats:
+            csum = self.summary.get("by_category", {}).get(c, {})
+            grouped_bar_data.append({
+                "category": c,
+                "category_name": cat_names.get(c, c.upper()),
+                "matched": csum.get("matched", 0),
+                "mismatched": csum.get("mismatched", 0),
+                "excluded": csum.get("excluded", 0),
+                "total": csum.get("total_records", 0),
+                "match_rate": csum.get("match_rate", 0.0)
+            })
+
+        # 3. Stacked 100% Progress per category
+        stacked_progress = []
+        for c in cats:
+            csum = self.summary.get("by_category", {}).get(c, {})
+            tot = csum.get("total_initial_records", 0) or csum.get("total_records", 1) or 1
+            m = csum.get("matched", 0)
+            diff = csum.get("mismatched", 0)
+            ex = csum.get("excluded", 0)
+            stacked_progress.append({
+                "category": c,
+                "category_name": cat_names.get(c, c.upper()),
+                "rate": csum.get("match_rate", 0.0),
+                "matched_pct": round((m / tot) * 100, 1),
+                "mismatch_pct": round((diff / tot) * 100, 1),
+                "excluded_pct": round((ex / tot) * 100, 1)
+            })
+
+        # 4. Root cause mismatch breakdown
+        reasons_counter = {}
+        dept_counter = {}
+        for c in cats:
+            for r in self.records.get(c, []):
+                if r.get("is_match") is False or r.get("is_excluded") is True:
+                    mtype = r.get("mismatch_type") or r.get("exclude_reason") or "ไม่ระบุสาเหตุ"
+                    reasons_counter[mtype] = reasons_counter.get(mtype, 0) + 1
+
+                    dept = r.get("it_dept") or r.get("cells", {}).get("สถานที่เก็บ") or r.get("cells", {}).get("แผนก") or "ไม่ระบุแผนก"
+                    dept_counter[dept] = dept_counter.get(dept, 0) + 1
+
+        top_reasons = sorted([{"reason": k, "count": v} for k, v in reasons_counter.items()], key=lambda x: x["count"], reverse=True)[:6]
+        top_depts = sorted([{"department": k, "count": v} for k, v in dept_counter.items()], key=lambda x: x["count"], reverse=True)[:6]
+
+        # SQLite DB Stats
+        db_stats = {"total_db_records": 0, "total_master_assets": len(self.master_dict), "db_exists": False}
+        conn = self._get_db_connection()
+        if conn:
+            try:
+                db_stats["db_exists"] = True
+                c1 = conn.execute("SELECT COUNT(*) FROM inventory_db_records").fetchone()
+                db_stats["total_db_records"] = c1[0] if c1 else 0
+                c2 = conn.execute("SELECT COUNT(*) FROM erp_master_assets").fetchone()
+                db_stats["total_master_assets"] = c2[0] if c2 else len(self.master_dict)
+            except Exception:
+                pass
+            finally:
+                conn.close()
+
+        return {
+            "summary": {
+                "total_records": total_active,
+                "total_initial_records": total_initial,
+                "matched_records": matched_count,
+                "mismatched_records": mismatched_count,
+                "excluded_records": excluded_count,
+                "user_edited_records": user_edited_count,
+                "match_rate": overall_match_rate
+            },
+            "donut_chart": donut_data,
+            "grouped_bar_chart": grouped_bar_data,
+            "stacked_progress_chart": stacked_progress,
+            "mismatch_breakdown": {
+                "top_reasons": top_reasons,
+                "top_departments": top_depts
+            },
+            "db_stats": db_stats
+        }
 
     def load_master(self, filepath_or_df) -> int:
         """Load and index the master ERP file. Marks all loaded categories as 'stale'."""
@@ -257,10 +702,16 @@ class InventoryComparator:
 
         for idx, row in df.iterrows():
             cells = {col: clean_val(row[col]) for col in df.columns}
+            aid, emp_id, emp_name, dept, sn = self._get_key_fields(category, cells)
             records.append({
                 "uid": f"{category}_{idx}",
                 "category": category,
                 "row_index": idx,
+                "asset_id": aid,
+                "it_emp_id": emp_id,
+                "it_emp_name": emp_name,
+                "it_dept": dept,
+                "it_sn": sn,
                 "cells": cells,
                 "orig_cells": copy.deepcopy(cells),
                 "user_edited_cols": [],
@@ -291,13 +742,89 @@ class InventoryComparator:
         return counts
 
     def _get_key_fields(self, category: str, cells: Dict[str, Any]) -> Tuple[str, str, str, str, str]:
-        """Extract (asset_id, emp_id, emp_name, dept, sn) from cells using COLUMN_MAP."""
+        """Extract (asset_id, emp_id, emp_name, dept, sn) from cells using COLUMN_MAP and robust fallbacks."""
         cmap = COLUMN_MAP.get(category, {})
+
+        # 1. Asset ID
         aid = clean_asset_id(cells.get(cmap.get("asset_id", ""), ""))
+        if not aid:
+            for alias in ["เลขที่ทรัพย์สิน", "รหัสทรัพย์สิน", "Fixed asset number", "Asset ID", "Asset_ID", "Asset Number", "Asset_Number", "AssetNo", "Asset_No", "เลขทรัพย์สิน"]:
+                if alias in cells and clean_asset_id(cells[alias]):
+                    aid = clean_asset_id(cells[alias])
+                    break
+        if not aid:
+            for k, v in cells.items():
+                k_clean = str(k).strip().lower()
+                if k_clean in ("เลขที่ทรัพย์สิน", "รหัสทรัพย์สิน", "fixed asset number", "asset id", "asset_id", "asset number", "asset_number", "assetno"):
+                    val = clean_asset_id(v)
+                    if val:
+                        aid = val
+                        break
+
+        # 2. Employee ID
         emp_id = clean_emp_id(cells.get(cmap.get("emp_id", ""), ""))
+        if not emp_id:
+            for alias in ["รหัสพนักงาน", "Responsible", "Employee ID", "Employee_ID", "Emp ID", "Emp_ID", "EmployeeID"]:
+                if alias in cells and clean_emp_id(cells[alias]):
+                    emp_id = clean_emp_id(cells[alias])
+                    break
+        if not emp_id:
+            for k, v in cells.items():
+                k_clean = str(k).strip().lower()
+                if k_clean in ("รหัสพนักงาน", "responsible", "employee id", "employee_id", "emp id", "emp_id", "employeeid"):
+                    val = clean_emp_id(v)
+                    if val:
+                        emp_id = val
+                        break
+
+        # 3. Employee Name
         emp_name = clean_val(cells.get(cmap.get("emp_name", ""), ""))
+        if not emp_name:
+            for alias in ["ผู้ใช้งาน/ดูแล", "ผู้ดูแล", "WorkName", "ชื่อผู้รับผิดชอบ", "ชื่อพนักงาน", "Employee Name", "User Name", "ผู้ใช้งาน"]:
+                if alias in cells and clean_val(cells[alias]):
+                    emp_name = clean_val(cells[alias])
+                    break
+        if not emp_name:
+            for k, v in cells.items():
+                k_clean = str(k).strip().lower()
+                if k_clean in ("ผู้ใช้งาน/ดูแล", "ผู้ดูแล", "workname", "ชื่อผู้รับผิดชอบ", "ชื่อพนักงาน", "employee name", "user name", "ผู้ใช้งาน"):
+                    val = clean_val(v)
+                    if val:
+                        emp_name = val
+                        break
+
+        # 4. Department / Location
         dept = clean_val(cells.get(cmap.get("dept", ""), ""))
+        if not dept:
+            for alias in ["สถานที่เก็บ", "Name2", "แผนก", "ฝ่าย", "Department", "Location", "แผนก/สถานที่", "ฝ่ายงานตามผังบัญชี"]:
+                if alias in cells and clean_val(cells[alias]):
+                    dept = clean_val(cells[alias])
+                    break
+        if not dept:
+            for k, v in cells.items():
+                k_clean = str(k).strip().lower()
+                if k_clean in ("สถานที่เก็บ", "name2", "แผนก", "ฝ่าย", "department", "location", "แผนก/สถานที่", "ฝ่ายงานตามผังบัญชี"):
+                    val = clean_val(v)
+                    if val:
+                        dept = val
+                        break
+
+        # 5. Serial Number / Key License
         sn = clean_val(cells.get(cmap.get("sn", ""), ""))
+        if not sn:
+            for alias in ["S/N", "Serial number", "Serial Number", "Serial", "Key License", "License Key", "Key_License"]:
+                if alias in cells and clean_val(cells[alias]):
+                    sn = clean_val(cells[alias])
+                    break
+        if not sn:
+            for k, v in cells.items():
+                k_clean = str(k).strip().lower()
+                if k_clean in ("s/n", "serial number", "serial", "key license", "license key", "key_license"):
+                    val = clean_val(v)
+                    if val:
+                        sn = val
+                        break
+
         return aid, emp_id, emp_name, dept, sn
 
     def _evaluate_values_against_erp(self, asset_id: str, it_emp_id: str, it_dept: str) -> Tuple[bool, str, List[str], Dict[str, Any]]:
@@ -949,6 +1476,11 @@ class InventoryComparator:
                 f.flush()
                 os.fsync(f.fileno())
             os.replace(tmp_path, self.autosave_path)
+            # Sync to SQLite DB automatically on autosave
+            try:
+                self.sync_to_sqlite()
+            except Exception:
+                pass
         except Exception as e:
             try:
                 from logger_util import get_system_logger

@@ -345,18 +345,41 @@ async def compare_all_categories(reset_to_orig: bool = Query(True, description="
 async def get_category_grid(
     category: str,
     filter_type: str = Query("all", description="all, mismatch, match, excluded, user_edited"),
+    source_mode: str = Query("latest_scan", description="latest_scan, db_saved, erp_master"),
+    sort_by: str = Query("row_index", description="sort field name or column"),
+    sort_order: str = Query("asc", description="asc or desc"),
     search: str = Query("", description="search query"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=100000)
 ):
-    """Retrieve full spreadsheet grid for category: column schema and paginated rows with full cells and ERP comparison."""
+    """Retrieve spreadsheet grid for category with multi-source filtering (latest scan vs SQLite DB vs ERP Master) and flexible sorting."""
     if category not in ("hw", "sw", "ups"):
         raise HTTPException(status_code=400, detail="Category must be hw, sw, or ups")
 
-    all_recs = comparator.records.get(category, [])
-    cols = comparator.columns.get(category, [])
-    if not cols and all_recs:
-        cols = list(all_recs[0]["cells"].keys())
+    # Select base records based on source_mode
+    if source_mode == "erp_master":
+        all_recs = comparator.get_erp_master_records()
+        cols = ["เลขที่ทรัพย์สิน", "ชื่อทรัพย์สิน", "รหัสพนักงาน", "ชื่อผู้รับผิดชอบ", "แผนก/สถานที่", "Location", "Serial Number", "สถานะ", "กลุ่มทรัพย์สิน"]
+    elif source_mode == "db_saved":
+        all_recs = comparator.get_db_records(category)
+        cols = comparator.columns.get(category, [])
+        if not cols and all_recs:
+            cols = list(all_recs[0]["cells"].keys())
+    else: # latest_scan (default)
+        all_recs = comparator.records.get(category, [])
+        cols = comparator.columns.get(category, [])
+        if not cols and all_recs:
+            cols = list(all_recs[0]["cells"].keys())
+
+    # Pre-populate key fields
+    for r in all_recs:
+        if "asset_id" not in r or not r["asset_id"]:
+            aid, emp_id, emp_name, dept, sn = comparator._get_key_fields(category, r.get("cells", {}))
+            r["asset_id"] = aid
+            r["it_emp_id"] = emp_id
+            r["it_emp_name"] = emp_name
+            r["it_dept"] = dept
+            r["it_sn"] = sn
 
     # Filter logic
     filtered = all_recs
@@ -377,36 +400,70 @@ async def get_category_grid(
     if search:
         q = search.lower().strip()
         def matches_rec(r):
-            # check cells
             for val in r.get("cells", {}).values():
                 if q in str(val).lower():
                     return True
-            # check ax_data
             ax = r.get("ax_data", {})
             for val in ax.values():
                 if q in str(val).lower():
                     return True
-            # check mismatch/exclude reasons
             if q in str(r.get("mismatch_type", "")).lower() or q in str(r.get("exclude_reason", "")).lower():
+                return True
+            if q in str(r.get("asset_id", "")).lower() or q in str(r.get("it_emp_name", "")).lower() or q in str(r.get("it_dept", "")).lower():
                 return True
             return False
         filtered = [r for r in filtered if matches_rec(r)]
+
+    # Sorting logic (Hybrid natural sort)
+    is_desc = (sort_order.lower() == "desc")
+    if sort_by and sort_by != "row_index":
+        def get_sort_key(r):
+            # Known aliases
+            if sort_by == "status":
+                # Excluded (0) -> Mismatch (1) -> User Edited (2) -> Match (3)
+                if r.get("is_excluded"): return 0
+                if r.get("is_match") is False: return 1
+                if r.get("user_edited_cols"): return 2
+                if r.get("is_match") is True: return 3
+                return 4
+            if sort_by == "asset_id":
+                val = r.get("asset_id") or r.get("cells", {}).get("เลขที่ทรัพย์สิน", "")
+                return str(val).strip().upper()
+            if sort_by == "mismatch_type":
+                return str(r.get("mismatch_type", "")).strip().lower()
+            if sort_by in ("emp_id", "it_emp_id"):
+                return str(r.get("it_emp_id") or r.get("cells", {}).get("รหัสพนักงาน", "")).strip()
+            if sort_by in ("emp_name", "it_emp_name"):
+                return str(r.get("it_emp_name") or r.get("cells", {}).get("ผู้ใช้งาน/ดูแล", "") or r.get("cells", {}).get("ผู้ดูแล", "")).strip()
+            if sort_by in ("dept", "it_dept"):
+                return str(r.get("it_dept") or r.get("cells", {}).get("สถานที่เก็บ", "")).strip()
+            # General column in cells
+            val = r.get("cells", {}).get(sort_by, "")
+            # Check numeric
+            try:
+                f = float(val)
+                return f
+            except Exception:
+                return str(val).strip().lower()
+
+        try:
+            filtered = sorted(filtered, key=get_sort_key, reverse=is_desc)
+        except Exception:
+            # Fallback to string sort
+            filtered = sorted(filtered, key=lambda r: str(get_sort_key(r)), reverse=is_desc)
+    elif is_desc:
+        filtered = list(reversed(filtered))
 
     total_count = len(filtered)
     offset = (page - 1) * page_size
     paginated_recs = filtered[offset: offset + page_size]
 
-    for r in paginated_recs:
-        aid, emp_id, emp_name, dept, sn = comparator._get_key_fields(category, r.get("cells", {}))
-        r["asset_id"] = aid
-        r["it_emp_id"] = emp_id
-        r["it_emp_name"] = emp_name
-        r["it_dept"] = dept
-        r["it_sn"] = sn
-
     return JSONResponse({
         "category": category,
         "category_state": comparator.category_states.get(category, "empty"),
+        "source_mode": source_mode,
+        "sort_by": sort_by,
+        "sort_order": sort_order,
         "columns": cols,
         "total": total_count,
         "total_count": total_count,
@@ -582,9 +639,20 @@ async def get_session_status():
         "autosave_dir": os.path.dirname(path) if path else "",
         "autosave_size_kb": size_kb,
         "autosave_last_saved": last_mod,
+        "db_path": comparator.db_path or "",
         "python_version": sys.version.split()[0],
         "platform_system": f"{platform.system()} {platform.release()} ({platform.machine()})"
     })
+
+@app.get("/api/analytics/charts")
+async def get_analytics_charts():
+    """Retrieve multi-chart visual analytics data for dashboard."""
+    try:
+        analytics = comparator.get_chart_analytics()
+        return JSONResponse(analytics)
+    except Exception as e:
+        logger.error(f"Failed to compute chart analytics: {e}", component="ANALYTICS", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 # =========================================================================
 # Excel & ZIP Exports (Reflecting 4-Tabs with exact cell edits)
