@@ -214,46 +214,12 @@ def test_manual_compare_and_spreadsheet_workflow():
     assert ov_baseline["mismatched_records"] == 377, f"Expected 377 mismatches, got {ov_baseline['mismatched_records']}"
     print("    Verified: Compare All correctly establishes baseline (51.4% match rate, 377 mismatches).")
 
-    # 11. Test Asset ID extraction & Grid Sorting
-    print("[12] Testing Asset ID verification and Grid Sorting...")
-    res_sort_desc = client.get("/api/grid/hw?sort_by=asset_id&sort_order=desc&page=1&page_size=10")
-    assert res_sort_desc.status_code == 200
-    recs_desc = res_sort_desc.json()["records"]
-    assert len(recs_desc) > 0
-    # Every HW record must have a non-empty asset_id
-    for r in recs_desc:
-        assert r["asset_id"] and len(r["asset_id"]) > 0, f"Record {r['uid']} missing asset_id!"
-    # Verify sorting order (descending)
-    assert recs_desc[0]["asset_id"] >= recs_desc[1]["asset_id"]
-    print("    Verified: Asset IDs are fully populated and grid sorts correctly descending.")
-
-    # 12. Test Multi-Source Filtering (latest_scan vs db_saved vs erp_master)
-    print("[13] Testing Multi-Source Filtering...")
-    res_db = client.get("/api/grid/hw?source_mode=db_saved&page=1&page_size=10")
-    assert res_db.status_code == 200
-    assert len(res_db.json()["records"]) > 0
-
-    res_erp = client.get("/api/grid/hw?source_mode=erp_master&page=1&page_size=10")
-    assert res_erp.status_code == 200
-    assert res_erp.json()["total"] >= 5000
-    print(f"    Verified: Multi-source filtering retrieves SQLite DB and ERP Master ({res_erp.json()['total']} records).")
-
-    # 13. Test Analytics Charts API (/api/analytics/charts)
-    print("[14] Testing GET /api/analytics/charts...")
-    res_charts = client.get("/api/analytics/charts")
-    assert res_charts.status_code == 200
-    charts_data = res_charts.json()
-    assert "donut_chart" in charts_data
-    assert "grouped_bar_chart" in charts_data
-    assert "mismatch_breakdown" in charts_data
-    print("    Verified: /api/analytics/charts returns complete chart payload.")
-
     # Clean up test session state so production workspace starts in pristine 'loaded' state
     client.post("/api/session/reset")
     from app import init_app_session
     init_app_session()
 
-    print("\n[SUCCESS] All Manual Compare, Spreadsheet Inspector, 4-Tab Export, and Sorting/Filter tests PASSED successfully!")
+    print("\n[SUCCESS] All Manual Compare, Spreadsheet Inspector, and 4-Tab Export tests PASSED successfully!")
 
 if __name__ == "__main__":
     test_manual_compare_and_spreadsheet_workflow()

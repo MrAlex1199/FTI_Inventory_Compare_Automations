@@ -10,11 +10,8 @@ document.addEventListener("DOMContentLoaded", () => {
         gridSearch: "",
         gridPage: 1,
         gridPageSize: 50,
-        gridSourceMode: "latest_scan", // 'latest_scan', 'db_saved', 'erp_master'
-        gridSortBy: "row_index",
-        gridSortOrder: "asc",
-        chartType: "donut", // 'donut', 'grouped_bar', 'stacked', 'breakdown'
-        analyticsData: null,
+        sortColumn: null, // Column name being sorted
+        sortOrder: null,  // 'asc', 'desc', or null
         viewMode: localStorage.getItem("fti_view_mode") || "mismatch", // 'mismatch' (default) or 'spreadsheet'
         selectedRecord: null,
         systemState: null,
@@ -95,10 +92,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         // Spreadsheet Grid & Toolbar
         gridFilterPills: document.querySelectorAll(".grid-filter-pill"),
-        gridSourceSelect: document.getElementById("grid-source-select"),
-        gridSortSelect: document.getElementById("grid-sort-select"),
-        btnSortOrder: document.getElementById("btn-sort-order"),
-        sortOrderIcon: document.getElementById("sort-order-icon"),
         gridSearchInput: document.getElementById("grid-search-input"),
         spreadsheetTable: document.getElementById("spreadsheet-table"),
         spreadsheetThead: document.getElementById("spreadsheet-thead"),
@@ -646,203 +639,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 chip3.textContent = "รอขั้นตอนที่ 2";
             }
         }
-        // Update Visual Analytics Charts
-        renderDashboardAnalytics();
     }
 
-    function syncSortControlsUI() {
-        if (elements.gridSortSelect) {
-            elements.gridSortSelect.value = state.gridSortBy;
-        }
-        if (elements.sortOrderIcon) {
-            elements.sortOrderIcon.className = (state.gridSortOrder === "desc") ? "fa-solid fa-arrow-down-z-a" : "fa-solid fa-arrow-up-a-z";
-        }
-    }
-
-    async function renderDashboardAnalytics() {
-        const viewportBox = document.getElementById("chart-viewport-box");
-        const loadingState = document.getElementById("chart-loading-state");
-        const renderContainer = document.getElementById("chart-render-container");
-        if (!renderContainer) return;
-
-        try {
-            const res = await fetch("/api/analytics/charts");
-            if (!res.ok) return;
-            const data = await res.json();
-            state.analyticsData = data;
-
-            if (loadingState) loadingState.style.display = "none";
-            renderContainer.style.display = "block";
-            drawActiveChart(data, state.chartType);
-        } catch (e) {
-            if (loadingState) {
-                loadingState.innerHTML = '<span style="color: var(--text-muted);">ยังไม่มีข้อมูลวิเคราะห์กราฟ</span>';
-            }
-        }
-    }
-
-    function drawActiveChart(data, type) {
-        const container = document.getElementById("chart-render-container");
-        if (!container) return;
-
-        if (type === "donut") {
-            const donut = data.donut_chart || [];
-            const ov = data.summary || {};
-            const total = (donut.reduce((acc, curr) => acc + curr.value, 0)) || 1;
-            const rate = ov.match_rate || 0.0;
-
-            // Generate SVG Donut Path
-            let cumAngle = 0;
-            const size = 180;
-            const r = 70;
-            const cx = 90;
-            const cy = 90;
-            const strokeWidth = 22;
-
-            let pathsSvg = "";
-            donut.forEach(seg => {
-                if (seg.value <= 0) return;
-                const pct = seg.value / total;
-                const angle = pct * 360;
-                const radStart = (cumAngle - 90) * Math.PI / 180;
-                const radEnd = (cumAngle + angle - 90) * Math.PI / 180;
-                cumAngle += angle;
-
-                const x1 = cx + r * Math.cos(radStart);
-                const y1 = cy + r * Math.sin(radStart);
-                const x2 = cx + r * Math.cos(radEnd);
-                const y2 = cy + r * Math.sin(radEnd);
-                const largeArc = angle > 180 ? 1 : 0;
-
-                // Handle full 360 circle
-                if (angle >= 359.9) {
-                    pathsSvg += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${seg.color}" stroke-width="${strokeWidth}" />`;
-                } else {
-                    pathsSvg += `<path d="M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}" fill="none" stroke="${seg.color}" stroke-width="${strokeWidth}" stroke-linecap="round" />`;
-                }
-            });
-
-            if (!pathsSvg) {
-                pathsSvg = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="rgba(148, 163, 184, 0.2)" stroke-width="${strokeWidth}" />`;
-            }
-
-            let legendHtml = donut.map(seg => `
-                <div class="chart-legend-item">
-                    <span class="legend-dot" style="background: ${seg.color};"></span>
-                    <span class="legend-label">${seg.label}</span>
-                    <strong class="legend-val">${seg.value.toLocaleString()} <span style="font-size: 11px; font-weight: 500; color: var(--text-muted);">(${((seg.value/total)*100).toFixed(1)}%)</span></strong>
-                </div>
-            `).join("");
-
-            container.innerHTML = `
-                <div class="donut-layout">
-                    <div class="donut-svg-wrap">
-                        <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-                            ${pathsSvg}
-                        </svg>
-                        <div class="donut-center-metric">
-                            <div class="donut-center-val text-green">${rate.toFixed(1)}%</div>
-                            <div class="donut-center-sub">ความตรงกันรวม</div>
-                        </div>
-                    </div>
-                    <div class="chart-legend-grid">
-                        ${legendHtml}
-                    </div>
-                </div>
-            `;
-        } else if (type === "grouped_bar") {
-            const barData = data.grouped_bar_chart || [];
-            let rowsHtml = barData.map(b => {
-                const tot = b.total || 1;
-                const mPct = ((b.matched / tot) * 100).toFixed(1);
-                const diffPct = ((b.mismatched / tot) * 100).toFixed(1);
-                const exPct = ((b.excluded / tot) * 100).toFixed(1);
-
-                return `
-                    <div class="bar-cat-row">
-                        <div class="bar-cat-header">
-                            <span class="bar-cat-name"><i class="fa-solid fa-folder"></i> ${b.category_name}</span>
-                            <span>อัตราตรงกัน: <strong class="text-green">${b.match_rate}%</strong> (${b.matched.toLocaleString()} จาก ${b.total.toLocaleString()} รายการ)</span>
-                        </div>
-                        <div class="bar-multi-track">
-                            <div class="bar-seg matched" style="width: ${mPct}%;" title="ตรงกัน: ${b.matched} (${mPct}%)"></div>
-                            <div class="bar-seg mismatched" style="width: ${diffPct}%;" title="จุดต่าง: ${b.mismatched} (${diffPct}%)"></div>
-                            <div class="bar-seg excluded" style="width: ${exPct}%;" title="ตัดออก: ${b.excluded} (${exPct}%)"></div>
-                        </div>
-                    </div>
-                `;
-            }).join("");
-
-            container.innerHTML = `
-                <div class="bar-chart-container">
-                    <div style="display: flex; gap: 16px; font-size: 12px; margin-bottom: 4px; justify-content: flex-end;">
-                        <span style="display: inline-flex; align-items: center; gap: 6px;"><span class="legend-dot" style="background: #10b981;"></span> ตรงกัน (Tab 3)</span>
-                        <span style="display: inline-flex; align-items: center; gap: 6px;"><span class="legend-dot" style="background: #ef4444;"></span> พบจุดต่าง (Diff)</span>
-                        <span style="display: inline-flex; align-items: center; gap: 6px;"><span class="legend-dot" style="background: #f59e0b;"></span> ตัดออก (Tab 4)</span>
-                    </div>
-                    ${rowsHtml}
-                </div>
-            `;
-        } else if (type === "stacked") {
-            const stacked = data.stacked_progress_chart || [];
-            let html = stacked.map(s => `
-                <div class="bar-cat-row" style="margin-bottom: 12px;">
-                    <div class="bar-cat-header">
-                        <span class="bar-cat-name">${s.category_name}</span>
-                        <strong class="text-green" style="font-size: 14px;">${s.rate}%</strong>
-                    </div>
-                    <div class="bento-progress-track" style="height: 12px; border-radius: 999px;">
-                        <div class="bento-progress-bar" style="width: ${s.rate}%; background: linear-gradient(90deg, #10b981, #059669);"></div>
-                    </div>
-                    <div style="display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); margin-top: 2px;">
-                        <span>สมบูรณ์แล้ว ${s.matched_pct}%</span>
-                        <span>รอดำเนินการ Auto-Fix ${s.mismatch_pct}%</span>
-                    </div>
-                </div>
-            `).join("");
-
-            container.innerHTML = `<div class="bar-chart-container" style="padding: 10px 0;">${html}</div>`;
-        } else if (type === "breakdown") {
-            const bd = data.mismatch_breakdown || {};
-            const topReasons = bd.top_reasons || [];
-            const topDepts = bd.top_departments || [];
-            const maxR = topReasons.length > 0 ? topReasons[0].count : 1;
-            const maxD = topDepts.length > 0 ? topDepts[0].count : 1;
-
-            let reasonsHtml = topReasons.map(r => `
-                <div class="breakdown-item">
-                    <span class="breakdown-item-name" title="${r.reason}">${r.reason}</span>
-                    <div class="breakdown-item-bar-wrap">
-                        <div class="breakdown-item-bar" style="width: ${Math.round((r.count/maxR)*100)}%;"></div>
-                    </div>
-                    <span class="breakdown-item-val">${r.count.toLocaleString()}</span>
-                </div>
-            `).join("") || '<p style="font-size: 12px; color: var(--text-muted);">ไม่มีรายการจุดต่างค้างอยู่</p>';
-
-            let deptsHtml = topDepts.map(d => `
-                <div class="breakdown-item">
-                    <span class="breakdown-item-name" title="${d.department}">${d.department}</span>
-                    <div class="breakdown-item-bar-wrap">
-                        <div class="breakdown-item-bar" style="width: ${Math.round((d.count/maxD)*100)}%; background: #f59e0b;"></div>
-                    </div>
-                    <span class="breakdown-item-val">${d.count.toLocaleString()}</span>
-                </div>
-            `).join("") || '<p style="font-size: 12px; color: var(--text-muted);">ไม่มีรายการจุดต่างค้างอยู่</p>';
-
-            container.innerHTML = `
-                <div class="breakdown-2col-grid">
-                    <div class="breakdown-card">
-                        <div class="breakdown-card-title"><i class="fa-solid fa-triangle-exclamation text-red"></i> ประเภทจุดต่างสูงสุด (Top Mismatch Reasons)</div>
-                        <div class="breakdown-list">${reasonsHtml}</div>
-                    </div>
-                    <div class="breakdown-card">
-                        <div class="breakdown-card-title"><i class="fa-solid fa-building-user text-amber"></i> แผนกที่พบจุดต่างสูงสุด (Top Departments)</div>
-                        <div class="breakdown-list">${deptsHtml}</div>
-                    </div>
-                </div>
-            `;
-        }
-    }
+    function updateWorkspaceControls(cat) {
         const st = (state.systemState && state.systemState.category_states && state.systemState.category_states[cat]) || "empty";
         const badge = elements.workspaceStatusBadge;
 
@@ -951,20 +750,47 @@ document.addEventListener("DOMContentLoaded", () => {
     });
 
     // =========================================================================
-    // Spreadsheet Grid Engine (Full Columns + In-Cell Edit)
+    // Spreadsheet Grid Engine (Full Columns + In-Cell Edit + 3-State Sorting)
     // =========================================================================
+    const COLUMN_MAP = {
+        hw: { emp_id: "รหัสพนักงาน", emp_name: "ผู้ใช้งาน/ดูแล", dept: "สถานที่เก็บ", sn: "S/N" },
+        sw: { emp_id: "รหัสพนักงาน", emp_name: "ผู้ดูแล", dept: "สถานที่เก็บ", sn: "Key License" },
+        ups: { emp_id: "รหัสพนักงาน", emp_name: "ผู้ใช้งาน/ดูแล", dept: "สถานที่เก็บ", sn: "S/N" }
+    };
+
+    function escapeHtml(str) {
+        if (!str) return "";
+        return String(str)
+            .replace(/&/g, "&amp;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#039;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+    }
+
+    function highlightSearch(text, query) {
+        if (!query || text === null || text === undefined || text === "") {
+            return (text === 0 ? "0" : (text || ""));
+        }
+        const str = String(text);
+        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const re = new RegExp(`(${escaped})`, 'gi');
+        return str.replace(re, '<mark class="search-match">$1</mark>');
+    }
+
     async function loadCategoryWorkspace(cat) {
         updateWorkspaceControls(cat);
 
         const params = new URLSearchParams({
             filter_type: state.gridFilter,
-            source_mode: state.gridSourceMode,
-            sort_by: state.gridSortBy,
-            sort_order: state.gridSortOrder,
             search: state.gridSearch,
             page: state.gridPage,
             page_size: state.gridPageSize
         });
+        if (state.sortColumn) {
+            params.set("sort_by", state.sortColumn);
+            params.set("sort_dir", state.sortOrder || "asc");
+        }
 
         elements.spreadsheetTbody.innerHTML = `<tr><td colspan="10" style="padding: 24px; text-align: center;"><i class="fa-solid fa-spinner fa-spin"></i> กำลังโหลดตารางข้อมูล...</td></tr>`;
 
@@ -983,52 +809,57 @@ document.addEventListener("DOMContentLoaded", () => {
         const records = data.records || [];
         const cat = data.category;
         const isMismatchMode = (state.viewMode === "mismatch");
-        const currentSort = state.gridSortBy;
-        const isDesc = (state.gridSortOrder === "desc");
 
-        const getSortIcon = (colKey) => {
-            if (currentSort === colKey) {
-                return `<i class="fa-solid ${isDesc ? 'fa-arrow-down-wide-short' : 'fa-arrow-up-short-wide'} sort-indicator-icon"></i>`;
-            }
-            return `<i class="fa-solid fa-sort sort-indicator-icon" style="opacity: 0.3;"></i>`;
-        };
+        function getSortIcon(col) {
+            if (state.sortColumn !== col) return '<i class="fa-solid fa-sort sort-icon"></i>';
+            if (state.sortOrder === "asc") return '<i class="fa-solid fa-sort-up sort-icon"></i>';
+            return '<i class="fa-solid fa-sort-down sort-icon"></i>';
+        }
+
+        function getSortClass(col) {
+            if (state.sortColumn !== col) return "";
+            return state.sortOrder === "asc" ? "sorted-asc" : "sorted-desc";
+        }
 
         // 1. Build Header
         if (isMismatchMode) {
             elements.spreadsheetThead.innerHTML = `
                 <tr>
-                    <th class="col-sticky-1 sortable-th ${currentSort === 'row_index' ? 'active-sort' : ''}" data-sort="row_index" style="width: 55px; text-align: center;" title="คลิกเพื่อเรียงตามลำดับแถว"># ${getSortIcon('row_index')}</th>
-                    <th class="col-sticky-2 sortable-th ${currentSort === 'status' ? 'active-sort' : ''}" data-sort="status" style="width: 140px;" title="คลิกเพื่อเรียงตามสถานะ">สถานะ ${getSortIcon('status')}</th>
-                    <th class="sortable-th ${currentSort === 'asset_id' ? 'active-sort' : ''}" data-sort="asset_id" style="width: 160px;" title="คลิกเพื่อเรียงตามรหัสทรัพย์สิน">รหัสทรัพย์สิน (Asset ID) ${getSortIcon('asset_id')}</th>
-                    <th class="sortable-th ${currentSort === 'mismatch_type' ? 'active-sort' : ''}" data-sort="mismatch_type" style="width: 200px;" title="คลิกเพื่อเรียงตามประเภทจุดต่าง">ประเภทจุดต่าง (Mismatch) ${getSortIcon('mismatch_type')}</th>
-                    <th class="sortable-th ${currentSort === 'emp_name' ? 'active-sort' : ''}" data-sort="emp_name" style="min-width: 250px;" title="คลิกเพื่อเรียงตามชื่อผู้ใช้งาน">ข้อมูลใน IT Inventory (เดิม/ล่าสุด) ${getSortIcon('emp_name')}</th>
-                    <th style="min-width: 250px;">ข้อมูลในระบบ ERP (AX)</th>
+                    <th class="col-sticky-1" style="width: 45px; text-align: center;">#</th>
+                    <th class="col-sticky-2 sortable-th ${getSortClass('status')}" data-sort="status" style="width: 135px;" title="คลิกเพื่อจัดเรียงตามสถานะ">สถานะ ${getSortIcon('status')}</th>
+                    <th class="sortable-th ${getSortClass('asset_id')}" data-sort="asset_id" style="width: 150px;" title="คลิกเพื่อจัดเรียงตามรหัสทรัพย์สิน">รหัสทรัพย์สิน (Asset ID) ${getSortIcon('asset_id')}</th>
+                    <th class="sortable-th ${getSortClass('mismatch_type')}" data-sort="mismatch_type" style="width: 190px;" title="คลิกเพื่อจัดเรียงตามประเภทจุดต่าง">ประเภทจุดต่าง (Mismatch) ${getSortIcon('mismatch_type')}</th>
+                    <th class="sortable-th ${getSortClass('it_emp_name')}" data-sort="it_emp_name" style="min-width: 250px;" title="คลิกเพื่อจัดเรียงตามชื่อผู้ถือครอง IT">ข้อมูลใน IT Inventory (เดิม/ล่าสุด) ${getSortIcon('it_emp_name')}</th>
+                    <th class="sortable-th ${getSortClass('ax_emp_name')}" data-sort="ax_emp_name" style="min-width: 250px;" title="คลิกเพื่อจัดเรียงตามชื่อ ERP AX">ข้อมูลในระบบ ERP (AX) ${getSortIcon('ax_emp_name')}</th>
                     <th style="width: 170px; text-align: center;">การจัดการ</th>
                 </tr>
             `;
         } else {
             let thHtml = `
-                <th class="col-sticky-1 sortable-th ${currentSort === 'row_index' ? 'active-sort' : ''}" data-sort="row_index" style="width: 55px; text-align: center;" title="คลิกเพื่อเรียงตามลำดับแถว"># ${getSortIcon('row_index')}</th>
-                <th class="col-sticky-2 sortable-th ${currentSort === 'status' ? 'active-sort' : ''}" data-sort="status" style="width: 140px;" title="คลิกเพื่อเรียงตามสถานะ">สถานะ ${getSortIcon('status')}</th>
+                <th class="col-sticky-1" style="width: 45px; text-align: center;">#</th>
+                <th class="col-sticky-2 sortable-th ${getSortClass('status')}" data-sort="status" style="width: 140px;" title="คลิกเพื่อจัดเรียงตามสถานะ">สถานะ ${getSortIcon('status')}</th>
             `;
             cols.forEach(col => {
-                const isActive = (currentSort === col);
-                thHtml += `<th class="sortable-th ${isActive ? 'active-sort' : ''}" data-sort="${col}" title="คลิกเพื่อเรียงตามคอลัมน์ ${col}">${col} ${getSortIcon(col)}</th>`;
+                thHtml += `<th class="sortable-th ${getSortClass(col)}" data-sort="${col}" title="คลิกเพื่อจัดเรียงตาม ${col}">${col} ${getSortIcon(col)}</th>`;
             });
             elements.spreadsheetThead.innerHTML = `<tr>${thHtml}</tr>`;
         }
 
-        // Attach sort header clicks
+        // Attach 3-State Column Sort Event Handlers
         elements.spreadsheetThead.querySelectorAll(".sortable-th").forEach(th => {
             th.addEventListener("click", () => {
-                const sortField = th.getAttribute("data-sort");
-                if (state.gridSortBy === sortField) {
-                    state.gridSortOrder = (state.gridSortOrder === "asc") ? "desc" : "asc";
+                const col = th.getAttribute("data-sort");
+                if (state.sortColumn === col) {
+                    if (state.sortOrder === "asc") {
+                        state.sortOrder = "desc";
+                    } else if (state.sortOrder === "desc") {
+                        state.sortColumn = null;
+                        state.sortOrder = null;
+                    }
                 } else {
-                    state.gridSortBy = sortField;
-                    state.gridSortOrder = "asc";
+                    state.sortColumn = col;
+                    state.sortOrder = "asc";
                 }
-                syncSortControlsUI();
                 state.gridPage = 1;
                 loadCategoryWorkspace(state.activeCategory);
             });
@@ -1096,7 +927,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (isMismatchMode) {
                 // Mismatch Inspector View: Clear Side-by-Side Comparison
-                const aid = r.asset_id || (r.cells && (r.cells["เลขที่ทรัพย์สิน"] || r.cells["รหัสทรัพย์สิน"] || r.cells["Fixed asset number"] || r.cells["Asset ID"] || r.cells["Asset_Number"] || r.cells["License_Key"])) || (ax && (ax.asset_id || ax.ax_asset_id)) || "-";
+                const aid = r.asset_id || (ax && ax.asset_id) || (r.cells && (r.cells["เลขที่ทรัพย์สิน"] || r.cells["รหัสทรัพย์สิน"] || r.cells["Fixed Asset Number"] || r.cells["Asset ID"] || r.cells["Asset_ID"] || r.cells["Asset Number"] || r.cells["Asset_Number"] || r.cells["License_Key"])) || "-";
                 const itEmp = r.it_emp_id || "-";
                 const itName = r.it_emp_name || "-";
                 const itDept = r.it_dept || "-";
@@ -1111,24 +942,33 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (mType.includes("ตัดจำหน่าย")) mTypeColor = "#ea580c";
                 if (mType.includes("ตรงกัน")) mTypeColor = "#16a34a";
 
+                const aidDisp = highlightSearch(aid, state.gridSearch);
+                const itEmpDisp = highlightSearch(itEmp, state.gridSearch);
+                const itNameDisp = highlightSearch(itName, state.gridSearch);
+                const itDeptDisp = highlightSearch(itDept, state.gridSearch);
+                const axEmpDisp = highlightSearch(axEmp, state.gridSearch);
+                const axNameDisp = highlightSearch(axName, state.gridSearch);
+                const axDeptDisp = highlightSearch(axDept, state.gridSearch);
+                const mTypeDisp = highlightSearch(mType, state.gridSearch);
+
                 tbodyHtml += `
                     <tr class="${rowClass}" data-uid="${uid}">
                         <td class="col-sticky-1" style="text-align: center; color: var(--text-muted);">${rowNum}</td>
                         <td class="col-sticky-2">${statusBadge}</td>
-                        <td style="font-family: var(--font-mono); font-weight: 600; color: var(--blue-primary);">${aid}</td>
-                        <td style="font-weight: 600; color: ${mTypeColor};">${mType}</td>
+                        <td style="font-family: var(--font-mono); font-weight: 600; color: var(--blue-primary);">${aidDisp}</td>
+                        <td style="font-weight: 600; color: ${mTypeColor};">${mTypeDisp}</td>
                         <td>
                             <div class="comp-box">
-                                <div class="comp-row"><span class="comp-label">รหัส:</span> <span class="comp-val ${diffs.includes('emp_id') ? 'diff-emp' : ''}">${itEmp}</span></div>
-                                <div class="comp-row"><span class="comp-label">ชื่อ:</span> <span class="comp-val">${itName}</span></div>
-                                <div class="comp-row"><span class="comp-label">แผนก:</span> <span class="comp-val ${diffs.includes('dept') ? 'diff-dept' : ''}">${itDept}</span></div>
+                                <div class="comp-row"><span class="comp-label">รหัส:</span> <span class="comp-val ${diffs.includes('emp_id') ? 'diff-emp' : ''}">${itEmpDisp}</span></div>
+                                <div class="comp-row"><span class="comp-label">ชื่อ:</span> <span class="comp-val">${itNameDisp}</span></div>
+                                <div class="comp-row"><span class="comp-label">แผนก:</span> <span class="comp-val ${diffs.includes('dept') ? 'diff-dept' : ''}">${itDeptDisp}</span></div>
                             </div>
                         </td>
                         <td>
                             <div class="comp-box">
-                                <div class="comp-row"><span class="comp-label">รหัส:</span> <span class="comp-val">${axEmp}</span></div>
-                                <div class="comp-row"><span class="comp-label">ชื่อ:</span> <span class="comp-val">${axName}</span></div>
-                                <div class="comp-row"><span class="comp-label">แผนก:</span> <span class="comp-val">${axDept}</span></div>
+                                <div class="comp-row"><span class="comp-label">รหัส:</span> <span class="comp-val">${axEmpDisp}</span></div>
+                                <div class="comp-row"><span class="comp-label">ชื่อ:</span> <span class="comp-val">${axNameDisp}</span></div>
+                                <div class="comp-row"><span class="comp-label">แผนก:</span> <span class="comp-val">${axDeptDisp}</span></div>
                                 <div class="comp-row"><span class="comp-label">สถานะ:</span> <span class="comp-val" style="color: ${ax.is_scrapped ? '#ef4444' : 'inherit'}; font-weight: 600;">${axStatus}</span></div>
                             </div>
                         </td>
@@ -1168,7 +1008,8 @@ document.addEventListener("DOMContentLoaded", () => {
                         cellClass += " cell-user-edited";
                     }
 
-                    trHtml += `<td class="${cellClass}" data-col="${col}" title="ดับเบิลคลิกเพื่อแก้ไข">${val}</td>`;
+                    const valDisp = highlightSearch(val, state.gridSearch);
+                    trHtml += `<td class="${cellClass}" data-col="${col}" title="ดับเบิลคลิกเพื่อแก้ไข">${valDisp}</td>`;
                 });
 
                 trHtml += `</tr>`;
@@ -1280,12 +1121,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (!rec) return;
 
                 const ax = rec.ax_data || {};
-                const cmap = {
-                    hw: ["รหัสพนักงาน", "ผู้ใช้งาน/ดูแล", "สถานที่เก็บ"],
-                    sw: ["รหัสพนักงาน", "ผู้ดูแล", "สถานที่เก็บ"],
-                    ups: ["รหัสพนักงาน", "ผู้ใช้งาน/ดูแล", "สถานที่เก็บ"]
-                };
-                const cols = cmap[rec.category] || cmap["hw"];
+                const cmap = COLUMN_MAP[rec.category] || COLUMN_MAP["hw"];
 
                 btn.disabled = true;
                 btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>';
@@ -1295,21 +1131,21 @@ document.addEventListener("DOMContentLoaded", () => {
                         await fetch("/api/cell", {
                             method: "PATCH",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ uid, column: cols[0], value: ax.ax_emp_id, user: "IT Officer" })
+                            body: JSON.stringify({ uid, column: cmap.emp_id, value: ax.ax_emp_id, user: "IT Officer" })
                         });
                     }
                     if (ax.ax_emp_name) {
                         await fetch("/api/cell", {
                             method: "PATCH",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ uid, column: cols[1], value: ax.ax_emp_name, user: "IT Officer" })
+                            body: JSON.stringify({ uid, column: cmap.emp_name, value: ax.ax_emp_name, user: "IT Officer" })
                         });
                     }
                     if (ax.ax_dept) {
                         await fetch("/api/cell", {
                             method: "PATCH",
                             headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({ uid, column: cols[2], value: ax.ax_dept, user: "IT Officer" })
+                            body: JSON.stringify({ uid, column: cmap.dept, value: ax.ax_dept, user: "IT Officer" })
                         });
                     }
                     showToast(`ซิงค์ข้อมูล ${rec.asset_id || uid} ให้ตรงกับ ERP เรียบร้อย`, "success");
@@ -1351,41 +1187,88 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // =========================================================================
-    // Side Panel Rendering & Row Actions
+    // Field-by-Field Diff Inspector (Side Panel Engine)
     // =========================================================================
     function renderSidePanel(rec) {
-        if (elements.erpSidePanel) {
-            elements.erpSidePanel.classList.remove("collapsed");
-        }
+        if (!elements.erpSidePanel) return;
+        elements.erpSidePanel.classList.remove("collapsed");
+
         const ax = rec.ax_data || {};
         const isExcl = rec.is_excluded;
+        const cmap = COLUMN_MAP[rec.category] || COLUMN_MAP["hw"];
+        const cells = rec.cells || {};
+
+        const aid = rec.asset_id || (ax && ax.asset_id) || cells["เลขที่ทรัพย์สิน"] || cells["รหัสทรัพย์สิน"] || cells["Fixed Asset Number"] || cells["Asset ID"] || cells["Asset_ID"] || cells["Asset Number"] || cells["Asset_Number"] || cells["License_Key"] || "-";
+        const axStatus = ax.ax_status || (ax.asset_id ? "ปกติ" : "ไม่พบใน ERP");
+
+        // Helper to render one comparison card
+        function renderDiffFieldCard(fieldTitle, itVal, axVal, colName) {
+            const strIt = (itVal || "").trim();
+            const strAx = (axVal || "").trim();
+            const isMatch = Boolean(strIt && strAx && strIt.toLowerCase() === strAx.toLowerCase());
+            const hasAxVal = Boolean(strAx && strAx !== "-");
+            const canSync = hasAxVal && !isMatch && ax.asset_id && !ax.is_scrapped;
+
+            return `
+                <div class="field-diff-card ${isMatch ? 'diff-match' : 'diff-mismatch'}">
+                    <div class="field-diff-header">
+                        <span class="field-diff-title">${fieldTitle}</span>
+                        <span class="diff-badge ${isMatch ? 'badge-match' : 'badge-mismatch'}">
+                            <i class="fa-solid ${isMatch ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i>
+                            ${isMatch ? 'ตรงกัน 100%' : 'ต่างกัน'}
+                        </span>
+                    </div>
+                    <div class="field-diff-grid">
+                        <div class="diff-val-row">
+                            <span class="diff-source-label">ใน IT:</span>
+                            <span class="diff-val-text">${escapeHtml(itVal) || '<span class="text-muted">(ว่าง)</span>'}</span>
+                        </div>
+                        <div class="diff-val-row">
+                            <span class="diff-source-label">ใน ERP:</span>
+                            <span class="diff-val-text text-erp">${escapeHtml(axVal) || '<span class="text-muted">(ไม่พบใน ERP)</span>'}</span>
+                        </div>
+                    </div>
+                    ${canSync ? `
+                        <button class="btn-field-sync" data-col="${escapeHtml(colName)}" data-val="${escapeHtml(axVal)}" title="ซิงค์เฉพาะฟิลด์นี้ให้ตรงกับ ERP">
+                            <i class="fa-solid fa-bolt"></i> ซิงค์เฉพาะค่านี้
+                        </button>
+                    ` : ''}
+                </div>
+            `;
+        }
+
+        const itEmpId = rec.it_emp_id || cells[cmap.emp_id] || "";
+        const itEmpName = rec.it_emp_name || cells[cmap.emp_name] || "";
+        const itDept = rec.it_dept || cells[cmap.dept] || "";
+        const itSn = rec.it_sn || cells[cmap.sn] || "";
 
         let html = `
-            <div class="side-item-group">
-                <div class="side-item-label">รหัสสินทรัพย์ (Asset ID):</div>
-                <div class="side-item-val" style="color: var(--blue-primary); font-family: monospace;">${rec.asset_id || (ax && (ax.asset_id || ax.ax_asset_id)) || (rec.cells && (rec.cells["เลขที่ทรัพย์สิน"] || rec.cells["รหัสทรัพย์สิน"] || rec.cells["Fixed asset number"] || rec.cells["Asset ID"] || rec.cells["Asset_Number"] || rec.cells["License_Key"])) || "-"}</div>
+            <div class="side-hero-banner">
+                <div class="side-hero-top">
+                    <span class="side-hero-id">${escapeHtml(aid)}</span>
+                    <span class="diff-badge ${ax.is_scrapped ? 'badge-mismatch' : (ax.asset_id ? 'badge-match' : 'badge-mismatch')}">
+                        ${axStatus}
+                    </span>
+                </div>
+                <div style="font-size: 11.5px; color: var(--text-muted);">หมวดหมู่: <strong style="color: var(--text-primary);">${rec.category.toUpperCase()}</strong> | UID: ${rec.uid}</div>
             </div>
-            <div class="side-item-group">
-                <div class="side-item-label">สถานะในระบบ ERP (AX):</div>
-                <div class="side-item-val">${ax.ax_status || (ax.asset_id ? "ปกติ" : "ไม่พบใน ERP")}</div>
-            </div>
-            <div class="side-item-group">
-                <div class="side-item-label">ผู้ถือครองใน ERP:</div>
-                <div class="side-item-val">${ax.ax_emp_name ? `${ax.ax_emp_name} (${ax.ax_emp_id || ""})` : (ax.ax_emp_id || "-")}</div>
-            </div>
-            <div class="side-item-group">
-                <div class="side-item-label">แผนกใน ERP:</div>
-                <div class="side-item-val">${ax.ax_dept || "-"}</div>
-            </div>
-            <div class="side-item-group">
-                <div class="side-item-label">Serial Number (ERP):</div>
-                <div class="side-item-val">${ax.ax_sn || "-"}</div>
-            </div>
+
+            <!-- Field 1: รหัสพนักงาน -->
+            ${renderDiffFieldCard("รหัสพนักงาน (Employee ID)", itEmpId, ax.ax_emp_id || "", cmap.emp_id)}
+
+            <!-- Field 2: ชื่อผู้ถือครอง / ผู้ดูแล -->
+            ${renderDiffFieldCard("ชื่อผู้ถือครอง (Employee Name)", itEmpName, ax.ax_emp_name || "", cmap.emp_name)}
+
+            <!-- Field 3: แผนก / สถานที่เก็บ -->
+            ${renderDiffFieldCard("แผนก (Department / Location)", itDept, ax.ax_dept || "", cmap.dept)}
+
+            <!-- Field 4: Serial Number -->
+            ${renderDiffFieldCard("Serial Number / Key", itSn, ax.ax_sn || "", cmap.sn)}
 
             <div class="side-actions-row">
                 ${ax.asset_id && !ax.is_scrapped ? `
                     <button class="btn btn-primary btn-sm" id="btn-side-sync-erp">
-                        <i class="fa-solid fa-bolt"></i> ใช้ข้อมูล ERP กับแถวนี้
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> ซิงค์ทุกฟิลด์ให้ตรงกับ ERP
                     </button>
                 ` : ""}
 
@@ -1398,7 +1281,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
         elements.sidePanelBody.innerHTML = html;
 
-        // Bind Side Panel Action Buttons
+        // Bind Per-Field Sync Buttons
+        elements.sidePanelBody.querySelectorAll(".btn-field-sync").forEach(btn => {
+            btn.addEventListener("click", async (e) => {
+                e.stopPropagation();
+                const col = btn.getAttribute("data-col");
+                const val = btn.getAttribute("data-val");
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังซิงค์...';
+                try {
+                    const res = await fetch("/api/cell", {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ uid: rec.uid, column: col, value: val, user: "IT Officer" })
+                    });
+                    const d = await res.json();
+                    if (!res.ok) throw new Error(d.detail);
+                    showToast(`ซิงค์ ${col} เป็น "${val}" สำเร็จ`, "success");
+                    await fetchSystemState();
+                    await loadCategoryWorkspace(rec.category);
+                    if (d.record) {
+                        state.selectedRecord = d.record;
+                        renderSidePanel(d.record);
+                    }
+                } catch (err) {
+                    showToast(`ซิงค์ไม่สำเร็จ: ${err.message}`, "error");
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-bolt"></i> ซิงค์เฉพาะค่านี้';
+                }
+            });
+        });
+
+        // Bind Toggle Exclude
         const btnToggleExcl = document.getElementById("btn-side-toggle-excl");
         if (btnToggleExcl) {
             btnToggleExcl.addEventListener("click", async () => {
@@ -1420,21 +1334,24 @@ document.addEventListener("DOMContentLoaded", () => {
             });
         }
 
+        // Bind Sync All ERP
         const btnSyncErp = document.getElementById("btn-side-sync-erp");
         if (btnSyncErp) {
             btnSyncErp.addEventListener("click", async () => {
+                btnSyncErp.disabled = true;
+                btnSyncErp.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> กำลังซิงค์ทุกฟิลด์...';
                 try {
-                    const cmap = { hw: ["รหัสพนักงาน", "ผู้ใช้งาน/ดูแล", "สถานที่เก็บ"], sw: ["รหัสพนักงาน", "ผู้ดูแล", "สถานที่เก็บ"], ups: ["รหัสพนักงาน", "ผู้ใช้งาน/ดูแล", "สถานที่เก็บ"] };
-                    const cols = cmap[rec.category];
-                    if (ax.ax_emp_id) await fetch("/api/cell", { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ uid: rec.uid, column: cols[0], value: ax.ax_emp_id }) });
-                    if (ax.ax_emp_name) await fetch("/api/cell", { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ uid: rec.uid, column: cols[1], value: ax.ax_emp_name }) });
-                    if (ax.ax_dept) await fetch("/api/cell", { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ uid: rec.uid, column: cols[2], value: ax.ax_dept }) });
+                    if (ax.ax_emp_id) await fetch("/api/cell", { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ uid: rec.uid, column: cmap.emp_id, value: ax.ax_emp_id, user: "IT Officer" }) });
+                    if (ax.ax_emp_name) await fetch("/api/cell", { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ uid: rec.uid, column: cmap.emp_name, value: ax.ax_emp_name, user: "IT Officer" }) });
+                    if (ax.ax_dept) await fetch("/api/cell", { method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ uid: rec.uid, column: cmap.dept, value: ax.ax_dept, user: "IT Officer" }) });
 
-                    showToast("ซิงค์ข้อมูลแถวนี้ให้ตรงกับ ERP แล้ว", "success");
+                    showToast("ซิงค์ทุกฟิลด์ของแถวนี้ให้ตรงกับ ERP แล้ว", "success");
                     await fetchSystemState();
                     await loadCategoryWorkspace(rec.category);
                 } catch (e) {
                     showToast(e.message, "error");
+                    btnSyncErp.disabled = false;
+                    btnSyncErp.innerHTML = '<i class="fa-solid fa-wand-magic-sparkles"></i> ซิงค์ทุกฟิลด์ให้ตรงกับ ERP';
                 }
             });
         }
@@ -1444,7 +1361,46 @@ document.addEventListener("DOMContentLoaded", () => {
         if (elements.erpSidePanel) {
             elements.erpSidePanel.classList.add("collapsed");
         }
-        elements.sidePanelBody.innerHTML = '<p class="side-panel-empty">คลิกเลือกแถวในตารางเพื่อดูข้อมูลเปรียบเทียบกับ ERP</p>';
+        elements.sidePanelBody.innerHTML = '<p class="side-panel-empty">คลิกเลือกแถวในตารางเพื่อดูการเปรียบเทียบจุดต่างรายฟิลด์</p>';
+    });
+
+    // =========================================================================
+    // Keyboard Navigation & Ergonomics (Arrow Up/Down, Enter/F2, Esc)
+    // =========================================================================
+    document.addEventListener("keydown", (e) => {
+        if (state.currentView === "files" || state.currentView === "summary") return;
+        if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+
+        const rows = Array.from(elements.spreadsheetTbody.querySelectorAll("tr[data-uid]"));
+        if (!rows.length) return;
+
+        const curIdx = rows.findIndex(r => r.classList.contains("selected"));
+
+        if (e.key === "ArrowDown") {
+            e.preventDefault();
+            const nextIdx = (curIdx < rows.length - 1) ? curIdx + 1 : 0;
+            const targetRow = rows[nextIdx];
+            targetRow.click();
+            targetRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            const prevIdx = (curIdx > 0) ? curIdx - 1 : rows.length - 1;
+            const targetRow = rows[prevIdx];
+            targetRow.click();
+            targetRow.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        } else if (e.key === "Escape") {
+            if (elements.erpSidePanel && !elements.erpSidePanel.classList.contains("collapsed")) {
+                elements.erpSidePanel.classList.add("collapsed");
+            }
+        } else if (e.key === "Enter" || e.key === "F2") {
+            if (curIdx >= 0) {
+                const targetRow = rows[curIdx];
+                const editableTd = targetRow.querySelector("td[data-col]");
+                if (editableTd) {
+                    editableTd.dispatchEvent(new MouseEvent("dblclick", { bubbles: true }));
+                }
+            }
+        }
     });
 
     // =========================================================================
@@ -1830,51 +1786,6 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.btnRefreshLogs.addEventListener("click", fetchLogs);
     elements.btnCloseLogs.addEventListener("click", () => { elements.modalLogs.style.display = "none"; });
     elements.btnDoneLogs.addEventListener("click", () => { elements.modalLogs.style.display = "none"; });
-
-    // Source Mode Switcher (Latest Scan vs SQLite DB vs ERP Master)
-    if (elements.gridSourceSelect) {
-        elements.gridSourceSelect.addEventListener("change", (e) => {
-            state.gridSourceMode = e.target.value;
-            state.gridPage = 1;
-            loadCategoryWorkspace(state.activeCategory);
-        });
-    }
-
-    // Sort By Dropdown
-    if (elements.gridSortSelect) {
-        elements.gridSortSelect.addEventListener("change", (e) => {
-            state.gridSortBy = e.target.value;
-            state.gridPage = 1;
-            loadCategoryWorkspace(state.activeCategory);
-        });
-    }
-
-    // Sort Order Button (Asc / Desc)
-    if (elements.btnSortOrder) {
-        elements.btnSortOrder.addEventListener("click", () => {
-            state.gridSortOrder = (state.gridSortOrder === "asc") ? "desc" : "asc";
-            syncSortControlsUI();
-            state.gridPage = 1;
-            loadCategoryWorkspace(state.activeCategory);
-        });
-    }
-
-    // Chart Switcher Tabs
-    const chartSwitcher = document.getElementById("dashboard-chart-switcher");
-    if (chartSwitcher) {
-        chartSwitcher.querySelectorAll(".chart-tab-btn").forEach(btn => {
-            btn.addEventListener("click", () => {
-                chartSwitcher.querySelectorAll(".chart-tab-btn").forEach(b => b.classList.remove("active"));
-                btn.classList.add("active");
-                state.chartType = btn.getAttribute("data-chart");
-                if (state.analyticsData) {
-                    drawActiveChart(state.analyticsData, state.chartType);
-                } else {
-                    renderDashboardAnalytics();
-                }
-            });
-        });
-    }
 
     // Exit Application
     elements.btnExitApp.addEventListener("click", async () => {
