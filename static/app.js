@@ -657,7 +657,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (st === "compared") {
             badge.className = "status-indicator-badge text-green";
             badge.innerHTML = '<i class="fa-solid fa-circle-check"></i> เปรียบเทียบแล้ว';
-            elements.categoryKpiBar.style.display = "flex";
+            elements.categoryKpiBar.style.display = "inline-flex";
             if (elements.btnExportMismatch) elements.btnExportMismatch.style.display = "inline-flex";
             if (elements.btnExportCategory) elements.btnExportCategory.style.display = "inline-flex";
             elements.btnRunAutoFix.style.display = "inline-flex";
@@ -779,6 +779,12 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     async function loadCategoryWorkspace(cat) {
+        if (state.currentCategory !== cat) {
+            state.selectedRecord = null;
+            if (elements.erpSidePanel) {
+                elements.erpSidePanel.classList.add("collapsed");
+            }
+        }
         updateWorkspaceControls(cat);
 
         const params = new URLSearchParams({
